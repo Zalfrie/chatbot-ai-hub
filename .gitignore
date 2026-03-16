@@ -31,6 +31,9 @@ pnpm-debug.log*
 Thumbs.db
 desktop.ini
 
+# Claude Code local settings (may contain API keys)
+.claude/settings.local.json
+
 # IDE / Editor
 .vscode/
 .idea/
