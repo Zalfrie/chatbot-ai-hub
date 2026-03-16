@@ -12,6 +12,12 @@ export function useSocket() {
   const error = ref<string | null>(null)
 
   function getSocket(): Socket {
+    // Socket.io client can only run in the browser, not during SSR
+    if (!import.meta.client) {
+      // Return a no-op stub during SSR to prevent crashes
+      return { emit: () => {}, on: () => {}, connected: false } as unknown as Socket
+    }
+
     if (!globalSocket || !globalSocket.connected) {
       globalSocket = io(wsUrl, {
         auth: {
@@ -19,8 +25,8 @@ export function useSocket() {
         },
         transports: ['websocket', 'polling'],
         reconnection: true,
-        reconnectionAttempts: 5,
-        reconnectionDelay: 1000,
+        reconnectionAttempts: 10,
+        reconnectionDelay: 2000,
       })
 
       globalSocket.on('connect', () => {

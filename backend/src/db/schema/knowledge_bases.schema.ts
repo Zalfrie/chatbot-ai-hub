@@ -18,6 +18,10 @@ export const knowledgeBases = pgTable('knowledge_bases', {
   category: varchar('category', { length: 100 }),
   priority: smallint('priority').default(0),
   isActive: boolean('is_active').default(true),
+  // RAG tracking columns (Phase 8)
+  isEmbedded: boolean('is_embedded').default(false),
+  embeddedAt: timestamp('embedded_at', { withTimezone: true }),
+  chunkCount: smallint('chunk_count').default(0),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [

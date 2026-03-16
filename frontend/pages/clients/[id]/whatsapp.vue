@@ -165,47 +165,49 @@ const steps = [
   'Setelah terhubung, chatbot akan otomatis merespons pesan masuk.',
 ]
 
+// Register socket event listeners once on mount
+onMounted(() => {
+  const socket = subscribeToWa(clientId)
+
+  socket.on('wa:qr', (data: { clientId: string; qr: string }) => {
+    if (String(data.clientId) === clientId) {
+      currentQr.value = data.qr
+      waStatus.status = 'qr_ready'
+    }
+  })
+
+  socket.on('wa:connected', (data: { clientId: string; waNumber: string }) => {
+    if (String(data.clientId) === clientId) {
+      waStatus.status = 'connected'
+      waStatus.waNumber = data.waNumber
+      waStatus.connectedAt = new Date().toISOString()
+      currentQr.value = null
+    }
+  })
+
+  socket.on('wa:disconnected', (data: { clientId: string; reason: string }) => {
+    if (String(data.clientId) === clientId) {
+      waStatus.status = 'disconnected'
+      waStatus.waNumber = null
+      waStatus.connectedAt = null
+      currentQr.value = null
+      errorMsg.value = data.reason ? `Terputus: ${data.reason}` : ''
+    }
+  })
+
+  socket.on('wa:status', (data: { clientId: string; status: WaStatus['status'] }) => {
+    if (String(data.clientId) === clientId) {
+      waStatus.status = data.status
+    }
+  })
+})
+
 async function handleConnect() {
   actionLoading.value = true
   errorMsg.value = ''
   try {
     await api.post(`/api/clients/${clientId}/wa/connect`)
     waStatus.status = 'connecting'
-
-    // Subscribe to socket events
-    const socket = subscribeToWa(clientId)
-
-    socket.on('wa:qr', (data: { clientId: string; qr: string }) => {
-      if (String(data.clientId) === clientId) {
-        currentQr.value = data.qr
-        waStatus.status = 'qr_ready'
-      }
-    })
-
-    socket.on('wa:connected', (data: { clientId: string; waNumber: string }) => {
-      if (String(data.clientId) === clientId) {
-        waStatus.status = 'connected'
-        waStatus.waNumber = data.waNumber
-        waStatus.connectedAt = new Date().toISOString()
-        currentQr.value = null
-      }
-    })
-
-    socket.on('wa:disconnected', (data: { clientId: string; reason: string }) => {
-      if (String(data.clientId) === clientId) {
-        waStatus.status = 'disconnected'
-        waStatus.waNumber = null
-        waStatus.connectedAt = null
-        currentQr.value = null
-        errorMsg.value = data.reason ? `Terputus: ${data.reason}` : ''
-      }
-    })
-
-    socket.on('wa:status', (data: { clientId: string; status: WaStatus['status'] }) => {
-      if (String(data.clientId) === clientId) {
-        waStatus.status = data.status
-      }
-    })
   } catch (err: unknown) {
     const e = err as { data?: { message?: string } }
     errorMsg.value = e.data?.message || 'Gagal memulai koneksi WhatsApp.'

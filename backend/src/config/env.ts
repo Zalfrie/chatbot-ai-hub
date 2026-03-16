@@ -23,6 +23,9 @@ const envSchema = z.object({
   // AI Providers
   GROQ_API_KEY: z.string().optional(),
   ANTHROPIC_API_KEY: z.string().optional(),
+  GEMINI_API_KEY: z.string().optional(),
+  PINECONE_API_KEY: z.string().optional(),
+  PINECONE_INDEX: z.string().optional(),
 
   // JWT
   JWT_SECRET: z.string().default('change-this-secret-in-production'),

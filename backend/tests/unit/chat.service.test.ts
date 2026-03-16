@@ -22,6 +22,18 @@ vi.mock('../../src/providers/ai/ai.factory', () => ({
   createAIProvider: vi.fn(),
 }));
 
+vi.mock('../../src/providers/ai/pinecone.service', () => ({
+  PineconeService: vi.fn().mockImplementation(() => ({
+    search: vi.fn().mockResolvedValue([]),
+    upsertChunks: vi.fn().mockResolvedValue(undefined),
+    deleteByKnowledge: vi.fn().mockResolvedValue(undefined),
+    deleteByClient: vi.fn().mockResolvedValue(undefined),
+  })),
+  pineconeService: {
+    search: vi.fn().mockResolvedValue([]),
+  },
+}));
+
 // --- Fixtures ---
 
 const mockChatbot = {

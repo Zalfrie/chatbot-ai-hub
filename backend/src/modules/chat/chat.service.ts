@@ -5,6 +5,7 @@ import { buildSystemPrompt } from '../../utils/prompt-builder';
 import { ChatbotRepository } from '../chatbot/chatbot.repository';
 import { KnowledgeRepository } from '../knowledge/knowledge.repository';
 import { ConversationRepository, UsageRepository } from './conversation.repository';
+import { PineconeService, getPineconeService } from '../../providers/ai/pinecone.service';
 
 export interface ProcessMessageParams {
   clientId: number;
@@ -31,6 +32,7 @@ export class ChatService {
     private readonly convRepo: ConversationRepository,
     private readonly usageRepo: UsageRepository,
     private readonly aiProvider?: AIProvider, // injectable for testing
+    private readonly pinecone?: PineconeService, // injectable for testing
   ) {}
 
   async processMessage(params: ProcessMessageParams): Promise<ProcessMessageResult> {
@@ -40,8 +42,33 @@ export class ChatService {
       throw new Error(`Chatbot not found for client ${params.clientId}`);
     }
 
-    // 2. Load knowledge base
-    const knowledge = await this.knowledgeRepo.findActiveByClient(params.clientId);
+    // 2. Load relevant knowledge via RAG (Pinecone) with fallback to full knowledge base
+    let knowledge: { title: string; content: string; priority?: number | null; id: number; isActive: boolean | null }[] = [];
+    try {
+      const pc = this.pinecone ?? getPineconeService();
+      const ragChunks = await pc.search({
+        clientId: params.clientId,
+        query: params.userMessage,
+        topK: 3,
+      });
+
+      if (ragChunks.length > 0) {
+        // Map RAG chunks into a shape compatible with buildSystemPrompt
+        knowledge = ragChunks.map((chunk, i) => ({
+          id: i,
+          title: `Relevant Info ${i + 1}`,
+          content: chunk.content,
+          priority: null,
+          isActive: true,
+        }));
+      } else {
+        // Fallback: load full knowledge base if no RAG results
+        knowledge = await this.knowledgeRepo.findActiveByClient(params.clientId);
+      }
+    } catch {
+      // If Pinecone is unavailable, fall back gracefully
+      knowledge = await this.knowledgeRepo.findActiveByClient(params.clientId);
+    }
 
     // 3. Get or create conversation
     const conversation = await this.getOrCreateConversation(params, chatbot.id);
@@ -52,18 +79,40 @@ export class ChatService {
     // 5. Build system prompt
     const systemPrompt = buildSystemPrompt(chatbot.systemPrompt, knowledge);
 
-    // 6. Call AI provider
-    const provider = this.aiProvider ?? await createAIProvider(
-      (chatbot.aiProvider as 'groq' | 'claude') ?? 'groq',
-    );
-
-    const aiResponse = await provider.chat({
-      model: chatbot.aiModel ?? 'llama-3.3-70b-versatile',
+    // 6. Call AI provider (with fallback chain on rate-limit errors)
+    const chatRequest = {
+      model: chatbot.aiModel ?? 'llama-3.1-8b-instant',
       temperature: parseFloat(String(chatbot.temperature ?? 0.85)),
       maxTokens: chatbot.maxTokens ?? 1000,
       system: systemPrompt,
-      messages: [...history, { role: 'user', content: params.userMessage }],
-    });
+      messages: [...history, { role: 'user' as const, content: params.userMessage }],
+    };
+
+    // Fallback order: configured provider → llama-3.1-8b-instant (groq) → gemini-2.0-flash
+    const FALLBACK_CHAIN: Array<{ provider: 'groq' | 'claude' | 'gemini'; model: string }> = [
+      { provider: (chatbot.aiProvider as 'groq' | 'claude' | 'gemini') ?? 'groq', model: chatRequest.model },
+      { provider: 'groq', model: 'llama-3.1-8b-instant' },
+      { provider: 'gemini', model: 'gemini-2.0-flash' },
+    ];
+
+    let aiResponse = null;
+    let lastError: unknown;
+
+    for (const fallback of FALLBACK_CHAIN) {
+      // Skip if same as already-tried combo
+      if (aiResponse) break;
+      try {
+        const provider = this.aiProvider ?? await createAIProvider(fallback.provider);
+        aiResponse = await provider.chat({ ...chatRequest, model: fallback.model });
+      } catch (err) {
+        const msg = String(err);
+        const isRateLimit = msg.includes('429') || msg.includes('rate') || msg.includes('quota') || msg.includes('limit');
+        lastError = err;
+        if (!isRateLimit) throw err; // Non-rate-limit errors propagate immediately
+      }
+    }
+
+    if (!aiResponse) throw lastError;
 
     // 7. Save messages to DB
     await this.convRepo.saveMessage({

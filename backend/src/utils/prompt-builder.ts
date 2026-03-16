@@ -2,8 +2,8 @@ export interface KnowledgeEntry {
   id: number;
   title: string;
   content: string;
-  priority: number | null;
-  isActive: boolean | null;
+  priority?: number | null;
+  isActive?: boolean | null;
 }
 
 export function buildSystemPrompt(

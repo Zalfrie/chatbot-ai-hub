@@ -19,7 +19,8 @@
 9. [Frontend (Nuxt.js + TypeScript)](#frontend)
 10. [API Endpoints](#api-endpoints)
 11. [Fase Development](#fase-development)
-12. [Catatan Penting](#catatan-penting)
+12. [RAG + Vector Search (Fase 8)](#rag--vector-search-fase-8)
+13. [Catatan Penting](#catatan-penting)
 
 ---
 
@@ -1425,11 +1426,843 @@ GET    /api/clients/:id/analytics?from=&to=      # Usage stats per periode
 | **Fase 3** | WhatsApp | Integrasi Baileys, session management per client, QR code via WebSocket, incoming message handler |
 | **Fase 4** | Dashboard | Nuxt.js admin dashboard, semua halaman manajemen, QR display realtime |
 | **Fase 5** | Embed Widget | Vanilla TS widget, deploy widget.js, dokumentasi cara embed untuk UMKM |
-| **Fase 6** | Hardening | Rate limiting, usage billing, error handling, monitoring (PM2 + log), security audit |
+| **Fase 6** | Unit Testing | Vitest setup, unit test semua layer, integration test endpoint, coverage minimal 70% |
+| **Fase 7** | Hardening | Rate limiting, usage billing, error handling, monitoring (PM2 + log), security audit |
+| **Fase 8** | RAG + Vector Search | pgvector setup, chunking, embedding service, vector search, import file, crawling URL, AI-assisted input |
 
 ---
 
-## Catatan Penting
+## RAG + Vector Search (Fase 8)
+
+> Implementasi Retrieval Augmented Generation menggunakan **Pinecone** (cloud vector database) — tidak perlu install apapun di lokal, cukup API key.
+
+### Mengapa RAG?
+
+| Kondisi | Tanpa RAG | Dengan RAG |
+|---|---|---|
+| Knowledge base kecil (< 50KB) | ✅ Cukup | ✅ Cukup |
+| Knowledge base besar (ratusan produk) | ❌ Token boros, lambat | ✅ Efisien |
+| Banyak UMKM sekaligus | ❌ Prompt membengkak | ✅ Hanya ambil yang relevan |
+| Akurasi jawaban | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+
+---
+
+### Arsitektur RAG dengan Pinecone
+
+```
+┌─────────────────────────────────────────────────────┐
+│                   KNOWLEDGE INPUT                    │
+│                                                      │
+│  Manual / Upload File / Crawl URL / Paste Teks       │
+│                      ↓                              │
+│              Chunker Service                         │
+│          (pecah jadi ~400 kata)                      │
+│                      ↓                              │
+│            Embedding Service                         │
+│         (Gemini text-embedding-004)                  │
+│                      ↓                              │
+│  ┌────────────┐    ┌──────────────────────────┐     │
+│  │ PostgreSQL │    │  Pinecone (Cloud Vector)  │     │
+│  │ (metadata) │    │  (vector embeddings)      │     │
+│  └────────────┘    └──────────────────────────┘     │
+└─────────────────────────────────────────────────────┘
+
+┌─────────────────────────────────────────────────────┐
+│                   CHAT FLOW (RAG)                    │
+│                                                      │
+│  User tanya: "harga kue berapa?"                     │
+│                      ↓                              │
+│         Embed pertanyaan (Gemini)                    │
+│                      ↓                              │
+│      Vector Search di Pinecone                       │
+│      (cari top 3 chunk paling mirip)                 │
+│                      ↓                              │
+│      Inject chunk relevan ke prompt                  │
+│                      ↓                              │
+│         AI jawab dengan akurat ✅                    │
+└─────────────────────────────────────────────────────┘
+```
+
+---
+
+### Setup Pinecone
+
+#### 1. Daftar & Buat Index
+```
+1. Login ke app.pinecone.io
+2. Create Index:
+   - Name    : chatbot-hub
+   - Model   : text-embedding-004 (Google)
+   - Metric  : cosine
+   - Dimension: 768
+3. Copy API Key dari dashboard
+```
+
+#### 2. Environment Variables
+```env
+# .env
+PINECONE_API_KEY=your_pinecone_api_key
+PINECONE_INDEX=chatbot-hub
+GEMINI_API_KEY=your_gemini_api_key    # untuk generate embedding (gratis)
+```
+
+#### 3. Install Library
+```bash
+npm install @pinecone-database/pinecone @google/generative-ai
+npm install pdf-parse mammoth csv-parser cheerio
+npm install node-cron
+```
+
+---
+
+### Perubahan Database PostgreSQL
+
+Tidak perlu pgvector! Hanya tambah kolom untuk tracking:
+
+```sql
+-- Tambah kolom di knowledge_bases (tracking status embedding)
+ALTER TABLE knowledge_bases
+ADD COLUMN is_embedded   BOOLEAN DEFAULT FALSE,
+ADD COLUMN embedded_at   TIMESTAMPTZ NULL,
+ADD COLUMN chunk_count   SMALLINT DEFAULT 0;
+
+-- Tambah tabel untuk tracking sumber crawl
+CREATE TABLE knowledge_sources (
+  id            BIGSERIAL PRIMARY KEY,
+  client_id     BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  knowledge_id  BIGINT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+  source_type   VARCHAR(20) CHECK (source_type IN ('manual', 'file', 'url', 'text')),
+  source_url    VARCHAR(500) NULL,        -- jika dari crawling
+  last_content  TEXT NULL,               -- untuk deteksi perubahan saat re-crawl
+  last_crawled_at TIMESTAMPTZ NULL,
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+```
+
+---
+
+### Struktur Direktori Tambahan
+
+```
+src/
+├── modules/
+│   └── knowledge/
+│       ├── knowledge.routes.ts       ← tambah endpoint import & crawl
+│       ├── knowledge.controller.ts   ← tambah handler baru
+│       ├── knowledge.repository.ts   ← tambah updateEmbedStatus()
+│       ├── chunker.service.ts        ← BARU: pecah teks jadi chunks
+│       ├── crawler.service.ts        ← BARU: crawl URL & parse file
+│       └── importer.service.ts       ← BARU: handle upload file
+│
+├── providers/
+│   └── ai/
+│       ├── ai.interface.ts           ← tidak berubah
+│       ├── claude.provider.ts        ← tidak berubah
+│       ├── groq.provider.ts          ← tidak berubah
+│       ├── embedding.service.ts      ← BARU: Gemini embedding
+│       └── pinecone.service.ts       ← BARU: vector store & search
+│
+└── jobs/
+    └── reindex.job.ts                ← BARU: auto re-crawl scheduler
+```
+
+---
+
+### Core Logic RAG
+
+#### 1. Embedding Service (Gemini — Gratis)
+
+```typescript
+// src/providers/ai/embedding.service.ts
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+export class EmbeddingService {
+  private genAI: GoogleGenerativeAI;
+
+  constructor() {
+    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+  }
+
+  async embed(text: string): Promise<number[]> {
+    const model = this.genAI.getGenerativeModel({
+      model: 'text-embedding-004',
+    });
+    const result = await model.embedContent(text);
+    return result.embedding.values; // 768 dimensi
+  }
+
+  async embedBatch(texts: string[]): Promise<number[][]> {
+    return Promise.all(texts.map(t => this.embed(t)));
+  }
+}
+```
+
+---
+
+#### 2. Pinecone Service — Simpan & Cari Vector
+
+```typescript
+// src/providers/ai/pinecone.service.ts
+import { Pinecone } from '@pinecone-database/pinecone';
+
+export class PineconeService {
+  private client: Pinecone;
+  private indexName: string;
+
+  constructor() {
+    this.client = new Pinecone({
+      apiKey: process.env.PINECONE_API_KEY!,
+    });
+    this.indexName = process.env.PINECONE_INDEX!;
+  }
+
+  private get index() {
+    return this.client.index(this.indexName);
+  }
+
+  // Simpan chunks ke Pinecone
+  async upsertChunks(params: {
+    clientId: number;
+    knowledgeId: number;
+    chunks: { content: string; embedding: number[]; chunkIndex: number }[];
+  }) {
+    const vectors = params.chunks.map((chunk, i) => ({
+      id: `client_${params.clientId}_kb_${params.knowledgeId}_chunk_${chunk.chunkIndex}`,
+      values: chunk.embedding,
+      metadata: {
+        clientId: params.clientId,
+        knowledgeId: params.knowledgeId,
+        content: chunk.content,        // simpan konten di metadata
+        chunkIndex: chunk.chunkIndex,
+      },
+    }));
+
+    await this.index.upsert(vectors);
+  }
+
+  // Cari chunk paling relevan berdasarkan query
+  async search(params: {
+    clientId: number;
+    queryEmbedding: number[];
+    topK?: number;
+  }): Promise<{ content: string; score: number }[]> {
+    const result = await this.index.query({
+      vector: params.queryEmbedding,
+      topK: params.topK ?? 3,
+      filter: { clientId: params.clientId },  // isolasi per UMKM
+      includeMetadata: true,
+    });
+
+    return result.matches
+      .filter(m => (m.score ?? 0) > 0.7)     // threshold similarity
+      .map(m => ({
+        content: m.metadata?.content as string,
+        score: m.score ?? 0,
+      }));
+  }
+
+  // Hapus semua chunk milik 1 knowledge (saat update)
+  async deleteByKnowledge(clientId: number, knowledgeId: number) {
+    await this.index.deleteMany({
+      filter: { clientId, knowledgeId },
+    });
+  }
+}
+```
+
+---
+
+#### 3. Chunker Service
+
+```typescript
+// src/modules/knowledge/chunker.service.ts
+
+export class ChunkerService {
+  chunk(text: string, chunkSize = 400, overlap = 50): string[] {
+    const words = text.split(/\s+/);
+    const chunks: string[] = [];
+
+    let i = 0;
+    while (i < words.length) {
+      const chunk = words.slice(i, i + chunkSize).join(' ');
+      chunks.push(chunk);
+      i += chunkSize - overlap;
+    }
+
+    return chunks.filter(c => c.trim().length > 50);
+  }
+}
+```
+
+---
+
+#### 4. Update Chat Service — Minimal Change
+
+```typescript
+// src/modules/chat/chat.service.ts
+// Hanya bagian load knowledge yang berubah:
+
+// SEBELUMNYA (tanpa RAG):
+const knowledge = await knowledgeRepo.findActiveByClient(params.clientId);
+
+// SESUDAH RAG:
+const queryEmbedding = await embeddingService.embed(params.userMessage);
+const relevantChunks = await pineconeService.search({
+  clientId: params.clientId,
+  queryEmbedding,
+  topK: 3,
+});
+
+// Sisanya SAMA PERSIS ✅
+// buildSystemPrompt terima relevantChunks instead of all knowledge
+```
+
+---
+
+#### 5. Flow Saat UMKM Simpan Knowledge Baru
+
+```typescript
+// src/modules/knowledge/knowledge.controller.ts
+
+async createKnowledge(clientId: number, data: CreateKnowledgeDto) {
+  // 1. Simpan ke PostgreSQL seperti biasa
+  const knowledge = await knowledgeRepo.create(clientId, data);
+
+  // 2. Chunking
+  const chunks = chunkerService.chunk(data.content);
+
+  // 3. Generate embedding (Gemini — gratis)
+  const embeddings = await embeddingService.embedBatch(chunks);
+
+  // 4. Simpan ke Pinecone
+  await pineconeService.upsertChunks({
+    clientId,
+    knowledgeId: knowledge.id,
+    chunks: chunks.map((content, i) => ({
+      content,
+      embedding: embeddings[i],
+      chunkIndex: i,
+    })),
+  });
+
+  // 5. Update status di PostgreSQL
+  await knowledgeRepo.updateEmbedStatus(knowledge.id, chunks.length);
+
+  return knowledge;
+}
+```
+
+---
+
+### Cara Import Knowledge (Selain Manual)
+
+#### Upload File (PDF / DOCX / CSV)
+
+```typescript
+// src/modules/knowledge/importer.service.ts
+import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
+
+export class ImporterService {
+  async fromPdf(buffer: Buffer): Promise<string> {
+    const data = await pdfParse(buffer);
+    return data.text;
+  }
+
+  async fromDocx(buffer: Buffer): Promise<string> {
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+  }
+}
+```
+
+#### Crawling URL Website UMKM
+
+```typescript
+// src/modules/knowledge/crawler.service.ts
+import * as cheerio from 'cheerio';
+
+export class CrawlerService {
+  async crawlUrl(url: string): Promise<string> {
+    const html = await fetch(url).then(r => r.text());
+    const $ = cheerio.load(html);
+
+    $('nav, footer, script, style, iframe, .ads').remove();
+
+    return $('main, article, .content, body')
+      .text()
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+}
+```
+
+#### AI-Assisted dari Teks Mentah (Caption IG, dll)
+
+```typescript
+async structureRawText(rawText: string): Promise<string> {
+  const prompt = `
+    Strukturkan teks mentah ini menjadi knowledge base yang rapi:
+    "${rawText}"
+    Format: nama info, detail, harga jika ada, kontak jika ada.
+    Kembalikan hanya teks terstruktur tanpa penjelasan tambahan.
+  `;
+  const result = await aiProvider.chat({
+    messages: [{ role: 'user', content: prompt }],
+  });
+  return result.content;
+}
+```
+
+---
+
+### Endpoint Baru (Fase 8)
+
+```
+POST   /api/clients/:id/knowledge/import/file     # Upload PDF/DOCX/CSV
+POST   /api/clients/:id/knowledge/import/url      # Crawl dari URL
+POST   /api/clients/:id/knowledge/import/text     # AI-assisted dari teks mentah
+POST   /api/clients/:id/knowledge/reindex         # Re-generate semua embedding
+GET    /api/clients/:id/knowledge/search?q=       # Test vector search (debug)
+```
+
+---
+
+### Fase 8 di Terminal (Claude Code)
+
+```
+baca file planning.md section "RAG + Vector Search (Fase 8)", lalu implementasikan:
+1. Install library: @pinecone-database/pinecone @google/generative-ai pdf-parse mammoth cheerio node-cron
+2. Tambah migration: kolom is_embedded, embedded_at, chunk_count di knowledge_bases, dan tabel knowledge_sources
+3. Buat embedding.service.ts menggunakan Gemini text-embedding-004
+4. Buat pinecone.service.ts dengan fungsi upsertChunks, search, dan deleteByKnowledge
+5. Buat chunker.service.ts dengan chunk size 400 kata dan overlap 50 kata
+6. Buat crawler.service.ts menggunakan cheerio untuk crawl URL statis
+7. Buat importer.service.ts untuk handle upload PDF dan DOCX
+8. Update knowledge.controller.ts: saat create/update knowledge otomatis chunk + embed + upsert ke Pinecone
+9. Update chat.service.ts: ganti findActiveByClient dengan embed query + pineconeService.search
+10. Tambah endpoint import/file, import/url, import/text, dan reindex
+11. Buat unit test untuk chunker.service dan pinecone.service (dengan mock)
+```
+
+### Mengapa RAG?
+
+| Kondisi | Tanpa RAG | Dengan RAG |
+|---|---|---|
+| Knowledge base kecil (< 50KB) | ✅ Cukup | ✅ Cukup |
+| Knowledge base besar (ratusan produk) | ❌ Token boros, lambat | ✅ Efisien |
+| Banyak UMKM sekaligus | ❌ Prompt membengkak | ✅ Hanya ambil yang relevan |
+| Akurasi jawaban | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+
+---
+
+### Perubahan Database
+
+```sql
+-- 1. Aktifkan extension pgvector
+CREATE EXTENSION IF NOT EXISTS vector;
+
+-- 2. Tambah kolom embedding ke knowledge_bases
+ALTER TABLE knowledge_bases
+ADD COLUMN embedding vector(768) NULL;     -- 768 dimensi untuk Gemini embedding
+                                           -- ganti 1536 jika pakai OpenAI
+
+-- 3. Tambah tabel chunks (pecahan knowledge untuk RAG)
+CREATE TABLE knowledge_chunks (
+  id            BIGSERIAL PRIMARY KEY,
+  knowledge_id  BIGINT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
+  client_id     BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  chunk_index   SMALLINT NOT NULL,           -- urutan chunk dalam 1 knowledge
+  content       TEXT NOT NULL,               -- isi chunk (max ~500 kata)
+  embedding     vector(768) NOT NULL,        -- vector embedding chunk ini
+  created_at    TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 4. Index untuk vector search (cosine similarity)
+CREATE INDEX idx_chunks_embedding ON knowledge_chunks
+  USING ivfflat (embedding vector_cosine_ops)
+  WITH (lists = 100);
+
+CREATE INDEX idx_chunks_client ON knowledge_chunks(client_id);
+```
+
+---
+
+### Library Baru yang Dibutuhkan
+
+```
+pgvector          — PostgreSQL vector extension client untuk Node.js
+@google/generative-ai — Gemini embedding (gratis)
+cheerio           — crawling website statis
+playwright        — crawling website dinamis (JS-heavy)
+pdf-parse         — parse PDF
+mammoth           — parse DOCX
+csv-parser        — parse CSV
+node-cron         — jadwal auto re-crawl
+```
+
+---
+
+### Struktur Direktori Tambahan
+
+```
+src/
+├── modules/
+│   └── knowledge/
+│       ├── knowledge.routes.ts       ← tambah endpoint import & crawl
+│       ├── knowledge.controller.ts   ← tambah handler baru
+│       ├── knowledge.repository.ts   ← tambah findRelevantChunks()
+│       ├── chunker.service.ts        ← BARU: pecah teks jadi chunks
+│       ├── crawler.service.ts        ← BARU: crawl URL & parse file
+│       └── importer.service.ts       ← BARU: handle upload file
+│
+├── providers/
+│   └── ai/
+│       ├── ai.interface.ts           ← tidak berubah
+│       ├── claude.provider.ts        ← tidak berubah
+│       ├── groq.provider.ts          ← tidak berubah
+│       └── embedding.service.ts      ← BARU: generate & manage embedding
+```
+
+---
+
+### Core Logic RAG
+
+#### 1. Chunker Service — Pecah Teks Jadi Potongan Kecil
+
+```typescript
+// src/modules/knowledge/chunker.service.ts
+
+export class ChunkerService {
+  // Pecah teks panjang jadi chunks ~400 kata dengan overlap 50 kata
+  chunk(text: string, chunkSize = 400, overlap = 50): string[] {
+    const words = text.split(/\s+/);
+    const chunks: string[] = [];
+
+    let i = 0;
+    while (i < words.length) {
+      const chunk = words.slice(i, i + chunkSize).join(' ');
+      chunks.push(chunk);
+      i += chunkSize - overlap; // overlap agar konteks tidak putus
+    }
+
+    return chunks.filter(c => c.trim().length > 50); // buang chunk terlalu pendek
+  }
+}
+```
+
+**Kenapa perlu chunking?**
+```
+Knowledge panjang (1000 kata)
+         ↓
+Chunk 1: kata 1-400     → embedding #1
+Chunk 2: kata 350-750   → embedding #2  (overlap 50 kata)
+Chunk 3: kata 700-1000  → embedding #3
+
+User tanya → cari chunk paling relevan → inject hanya itu ke prompt
+```
+
+---
+
+#### 2. Embedding Service — Generate Vector dari Teks
+
+```typescript
+// src/providers/ai/embedding.service.ts
+
+import { GoogleGenerativeAI } from '@google/generative-ai';
+
+export class EmbeddingService {
+  private genAI: GoogleGenerativeAI;
+
+  constructor() {
+    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
+  }
+
+  // Generate embedding untuk satu teks
+  async embed(text: string): Promise<number[]> {
+    const model = this.genAI.getGenerativeModel({
+      model: 'text-embedding-004',
+    });
+
+    const result = await model.embedContent(text);
+    return result.embedding.values;
+  }
+
+  // Generate embedding untuk banyak teks sekaligus (batch)
+  async embedBatch(texts: string[]): Promise<number[][]> {
+    const results = await Promise.all(
+      texts.map(text => this.embed(text))
+    );
+    return results;
+  }
+}
+```
+
+---
+
+#### 3. Knowledge Repository — Vector Search
+
+```typescript
+// src/modules/knowledge/knowledge.repository.ts
+
+// Fungsi BARU: cari chunk paling relevan berdasarkan pertanyaan user
+async findRelevantChunks(
+  clientId: number,
+  queryEmbedding: number[],
+  topK = 3
+): Promise<KnowledgeChunk[]> {
+
+  // Cosine similarity search via pgvector
+  const result = await db.query(`
+    SELECT
+      kc.content,
+      kc.chunk_index,
+      kb.title,
+      1 - (kc.embedding <=> $1::vector) AS similarity
+    FROM knowledge_chunks kc
+    JOIN knowledge_bases kb ON kb.id = kc.knowledge_id
+    WHERE kc.client_id = $2
+      AND 1 - (kc.embedding <=> $1::vector) > 0.7  -- threshold similarity
+    ORDER BY kc.embedding <=> $1::vector            -- order by closest
+    LIMIT $3
+  `, [JSON.stringify(queryEmbedding), clientId, topK]);
+
+  return result.rows;
+}
+```
+
+---
+
+#### 4. Chat Service — Update untuk RAG
+
+```typescript
+// src/modules/chat/chat.service.ts
+// Perubahan MINIMAL — hanya bagian load knowledge
+
+// SEBELUMNYA (tanpa RAG):
+const knowledge = await knowledgeRepo.findActiveByClient(params.clientId);
+
+// SETELAH RAG:
+const queryEmbedding = await embeddingService.embed(params.userMessage);
+const knowledge = await knowledgeRepo.findRelevantChunks(
+  params.clientId,
+  queryEmbedding,
+  3  // ambil top 3 chunk paling relevan
+);
+
+// Sisanya SAMA PERSIS — tidak ada perubahan lain ✅
+```
+
+---
+
+#### 5. Flow Saat UMKM Input/Update Knowledge
+
+```typescript
+// src/modules/knowledge/knowledge.controller.ts
+// Saat UMKM simpan knowledge baru:
+
+async createKnowledge(clientId: number, data: CreateKnowledgeDto) {
+  // 1. Simpan knowledge ke DB seperti biasa
+  const knowledge = await knowledgeRepo.create(clientId, data);
+
+  // 2. Pecah konten jadi chunks
+  const chunks = chunkerService.chunk(data.content);
+
+  // 3. Generate embedding untuk semua chunks (batch)
+  const embeddings = await embeddingService.embedBatch(chunks);
+
+  // 4. Simpan chunks + embedding ke DB
+  await knowledgeRepo.saveChunks(
+    knowledge.id,
+    clientId,
+    chunks.map((content, i) => ({
+      content,
+      chunkIndex: i,
+      embedding: embeddings[i],
+    }))
+  );
+
+  return knowledge;
+}
+```
+
+---
+
+### Cara Import Knowledge (Selain Manual)
+
+#### Upload File (PDF / DOCX / CSV)
+
+```typescript
+// src/modules/knowledge/importer.service.ts
+
+import pdfParse from 'pdf-parse';
+import mammoth from 'mammoth';
+import csv from 'csv-parser';
+
+export class ImporterService {
+  async fromPdf(buffer: Buffer): Promise<string> {
+    const data = await pdfParse(buffer);
+    return data.text;
+  }
+
+  async fromDocx(buffer: Buffer): Promise<string> {
+    const result = await mammoth.extractRawText({ buffer });
+    return result.value;
+  }
+
+  async fromCsv(buffer: Buffer): Promise<string> {
+    // Ubah CSV jadi teks terstruktur untuk knowledge base
+    return new Promise((resolve) => {
+      const rows: string[] = [];
+      // parse CSV → format jadi Q&A atau daftar produk
+      resolve(rows.join('\n'));
+    });
+  }
+}
+```
+
+#### Crawling URL Website UMKM
+
+```typescript
+// src/modules/knowledge/crawler.service.ts
+
+import * as cheerio from 'cheerio';
+
+export class CrawlerService {
+  async crawlUrl(url: string): Promise<string> {
+    const html = await fetch(url).then(r => r.text());
+    const $ = cheerio.load(html);
+
+    // Hapus elemen tidak relevan
+    $('nav, footer, script, style, iframe, .ads').remove();
+
+    // Ambil konten utama
+    const content = $('main, article, .content, body')
+      .text()
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    return content;
+  }
+
+  // Crawl banyak halaman sekaligus
+  async crawlMultiple(urls: string[]): Promise<string> {
+    const contents = await Promise.all(
+      urls.map(url => this.crawlUrl(url))
+    );
+    return contents.join('\n\n');
+  }
+}
+```
+
+#### AI-Assisted Input (Paste dari IG/Caption)
+
+```typescript
+// UMKM paste teks acak dari caption Instagram/sosmed
+// AI strukturkan jadi knowledge base yang rapi
+
+async structureRawText(rawText: string, clientId: number): Promise<string> {
+  const prompt = `
+    Berikut adalah teks mentah dari informasi toko UMKM:
+    "${rawText}"
+
+    Strukturkan menjadi knowledge base yang rapi dalam format:
+    - Nama/Jenis informasi
+    - Detail lengkap
+    - Harga jika ada
+    - Kontak jika ada
+
+    Hanya kembalikan teks terstruktur, tanpa penjelasan tambahan.
+  `;
+
+  const result = await aiProvider.chat({
+    model: 'llama-3.3-70b-versatile',
+    messages: [{ role: 'user', content: prompt }],
+  });
+
+  return result.content;
+}
+```
+
+---
+
+### Endpoint Baru (Fase 8)
+
+```
+# Knowledge Base — tambahan untuk RAG
+POST   /api/clients/:id/knowledge/import/file     # Upload PDF/DOCX/CSV
+POST   /api/clients/:id/knowledge/import/url      # Crawl dari URL
+POST   /api/clients/:id/knowledge/import/text     # AI-assisted dari teks mentah
+POST   /api/clients/:id/knowledge/reindex         # Re-generate semua embedding
+GET    /api/clients/:id/knowledge/search?q=       # Test vector search (debug)
+```
+
+---
+
+### Auto Re-index Scheduler
+
+```typescript
+// src/jobs/reindex.job.ts
+import cron from 'node-cron';
+
+// Jalankan setiap hari jam 02.00 dini hari
+// Re-crawl URL yang terdaftar & update embedding jika konten berubah
+cron.schedule('0 2 * * *', async () => {
+  const clients = await clientRepo.findAllActive();
+
+  for (const client of clients) {
+    const crawlSources = await knowledgeRepo.findCrawlSources(client.id);
+
+    for (const source of crawlSources) {
+      const newContent = await crawlerService.crawlUrl(source.url);
+
+      if (newContent !== source.lastContent) {
+        // Konten berubah → update knowledge + re-generate embedding
+        await knowledgeService.updateAndReindex(source.id, newContent);
+      }
+    }
+  }
+});
+```
+
+---
+
+### Perbandingan Sebelum & Sesudah RAG
+
+```
+SEBELUM RAG:
+User: "harga kue berapa?"
+→ Inject SEMUA knowledge (500+ baris) ke prompt
+→ Token besar, mahal, lambat
+
+SESUDAH RAG:
+User: "harga kue berapa?"
+→ Embed pertanyaan → vector search
+→ Ambil TOP 3 chunk paling relevan saja
+→ "Kue 18cm Rp185rb, 22cm Rp285rb, 26cm Rp385rb"
+→ Token hemat 90%, lebih cepat, lebih akurat ✅
+```
+
+---
+
+### Fase 8 di Terminal (Claude Code)
+
+```
+baca file planning.md, lalu kerjakan fase 8 RAG + Vector Search:
+1. Install pgvector extension di PostgreSQL
+2. Jalankan migration: tambah kolom embedding di knowledge_bases dan buat tabel knowledge_chunks dengan index ivfflat
+3. Buat embedding.service.ts menggunakan Gemini text-embedding-004 (gratis)
+4. Buat chunker.service.ts dengan chunk size 400 kata dan overlap 50 kata
+5. Buat crawler.service.ts menggunakan cheerio untuk crawl URL
+6. Buat importer.service.ts untuk handle upload PDF, DOCX, dan CSV
+7. Update knowledge.repository.ts: tambah fungsi saveChunks dan findRelevantChunks dengan cosine similarity
+8. Update knowledge.controller.ts: saat create/update knowledge otomatis generate chunks dan embedding
+9. Update chat.service.ts: ganti findActiveByClient dengan findRelevantChunks via embedding
+10. Tambah endpoint POST /import/file, /import/url, /import/text, dan /reindex
+11. Buat unit test untuk chunker.service dan embedding.service
+```
+
+
 
 ### AI Provider
 - Untuk **development & testing** → gunakan **Groq** (gratis, daftar di console.groq.com)

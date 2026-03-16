@@ -53,6 +53,16 @@ Setiap tenant (UMKM) mendapat chatbot sendiri dengan knowledge base, nomor Whats
 
 > Semua provider dipanggil lewat satu `AIProvider` interface. Ganti provider = ubah env variable, tidak ubah kode.
 
+#### RAG + Vector Search (Phase 8)
+
+| Komponen | Teknologi | Peran |
+|---|---|---|
+| **Pinecone** | Vector database (cloud) | Simpan dan cari embedding knowledge base |
+| **Integrated Embedding** | `multilingual-e5-large` via Pinecone | Konversi teks → vector, tanpa API embedding terpisah |
+| **Chunker** | Sliding window 400 kata, overlap 50 | Pecah dokumen panjang jadi chunk optimal |
+| **Importer** | pdf-parse, mammoth | Import knowledge dari PDF, DOCX, plain text |
+| **Crawler** | cheerio | Crawl URL dan ekstrak konten bersih |
+
 #### Testing
 
 | Teknologi | Peran |
@@ -99,12 +109,14 @@ Pelanggan WA / Pengunjung Web
    │  (WA)      │  (Widget)
    └─────┬──────┘
          │
-    Chat Service ← load config + knowledge dari DB
+    Chat Service ← load config dari DB
+         │
+    RAG: Pinecone similarity search → top-K chunks
          │
     AI Provider (Groq / Claude)
          │
    ┌─────┴──────┐
-   │ PostgreSQL │  Redis
+   │ PostgreSQL │  Redis  │  Pinecone
    └────────────┘
 ```
 
@@ -120,12 +132,16 @@ Pelanggan WA / Pengunjung Web
 
 ## Development Phases
 
-1. **Foundation** — Setup project, DB schema, migrations, basic CRUD
-2. **AI Chat** — Integrasi Groq/Claude, knowledge injection, endpoint `/chat`
-3. **WhatsApp** — Baileys, QR code flow, session encryption
-4. **Dashboard** — Nuxt.js frontend, semua halaman manajemen
-5. **Widget** — Vanilla TS embed script, CDN deployment
-6. **Hardening** — Rate limiting, billing hooks, security audit
+| Fase | Nama | Status |
+|---|---|---|
+| 1 | **Foundation** — Setup project, DB schema, migrations, basic CRUD | Selesai |
+| 2 | **AI Chat** — Integrasi Groq/Claude, knowledge injection, endpoint `/chat` | Selesai |
+| 3 | **WhatsApp** — Baileys, QR code flow, session encryption | Selesai |
+| 4 | **Dashboard** — Nuxt.js frontend, semua halaman manajemen | Selesai |
+| 5 | **Widget** — Vanilla TS embed script, CDN deployment | Selesai |
+| 6 | **Hardening** — Rate limiting, billing hooks, security audit | Selesai |
+| 7 | **Production-Ready** — Winston logger, PM2 config, JWT refresh, error handling | Selesai |
+| 8 | **RAG + Vector Search** — Pinecone embedding, chunking, import PDF/URL/DOCX | Selesai |
 
 ---
 
@@ -150,52 +166,44 @@ JWT_REFRESH_SECRET=
 # App
 PORT=3000
 NODE_ENV=development
+
+# RAG / Vector Search (Phase 8)
+PINECONE_API_KEY=
+PINECONE_INDEX_NAME=chatbot-hub-knowledge
 ```
 
 ---
 
-## Next Steps
+## Phase 8 — RAG + Vector Search
 
-### RAG (Retrieval-Augmented Generation) + Vector Search
+Knowledge base kini menggunakan **Retrieval-Augmented Generation (RAG)** berbasis Pinecone, sehingga chatbot bisa menjawab lebih akurat dari dokumen yang relevan.
 
-Peningkatan selanjutnya adalah mengganti knowledge base berbasis teks biasa dengan sistem **RAG** menggunakan vector database, sehingga chatbot bisa menjawab lebih akurat berdasarkan dokumen yang relevan.
-
-#### Rencana Implementasi
-
-| Komponen | Teknologi | Keterangan |
-|---|---|---|
-| **Vector Database** | pgvector (PostgreSQL extension) | Simpan embedding langsung di DB yang sudah ada |
-| **Embedding Model** | `text-embedding-3-small` (OpenAI) / Groq | Konversi teks knowledge base → vector |
-| **Similarity Search** | Cosine similarity via pgvector | Cari knowledge yang paling relevan per query |
-| **Chunking** | Sliding window (512 token, overlap 50) | Pecah dokumen panjang menjadi chunk yang optimal |
-
-#### Alur RAG
+### Alur RAG
 
 ```
 User Message
      │
      ▼
-Embedding Model → query vector
+Pinecone similarity search (multilingual-e5-large)
      │
      ▼
-pgvector similarity search → top-K chunks relevan
-     │
-     ▼
-Inject chunks ke system prompt
+Top-K chunks relevan → inject ke system prompt
      │
      ▼
 AI Provider (Groq / Claude) → response kontekstual
 ```
 
-#### Perubahan Schema DB
+### Fitur yang Tersedia
 
-```sql
--- Tambah kolom vector ke tabel knowledge_bases
-ALTER TABLE knowledge_bases ADD COLUMN embedding vector(1536);
-CREATE INDEX ON knowledge_bases USING ivfflat (embedding vector_cosine_ops);
-```
+- **Import file** (`POST /knowledge/import/file`) — upload PDF, DOCX, atau TXT
+- **Import URL** (`POST /knowledge/import/url`) — crawl halaman web secara otomatis
+- **Import teks** (`POST /knowledge/import/text`) — paste teks langsung
+- **Reindex** (`POST /knowledge/reindex`) — embed ulang semua knowledge base ke Pinecone
+- **Search** (`GET /knowledge/search?q=...`) — uji coba similarity search
+- Create/update/delete knowledge base otomatis sync ke Pinecone
+- Fallback ke full knowledge base jika Pinecone tidak tersedia
 
-#### Manfaat
+### Manfaat
 
 - Chatbot bisa memproses dokumen panjang (katalog produk, FAQ lengkap, SOP)
 - Jawaban lebih relevan karena hanya inject context yang diperlukan

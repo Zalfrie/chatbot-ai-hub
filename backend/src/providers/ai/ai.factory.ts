@@ -12,6 +12,10 @@ export async function createAIProvider(providerName: ProviderName): Promise<AIPr
       const { ClaudeProvider } = await import('./claude.provider');
       return new ClaudeProvider();
     }
+    case 'gemini': {
+      const { GeminiProvider } = await import('./gemini.provider');
+      return new GeminiProvider();
+    }
     default:
       throw new Error(`AI provider "${providerName}" is not supported`);
   }
