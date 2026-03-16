@@ -6,6 +6,25 @@ Setiap tenant (UMKM) mendapat chatbot sendiri dengan knowledge base, nomor Whats
 
 ---
 
+## Screenshots
+
+### Login
+![Login](./screenshot/login.png)
+
+### Dashboard
+![Dashboard](./screenshot/dashboard.png)
+
+### Manajemen Klien
+![Clients](./screenshot/clients.png)
+
+### Detail Klien
+![Detail Client](./screenshot/detail-client.png)
+
+### Koneksi WhatsApp
+![Detail Client WhatsApp](./screenshot/detail-client-wa.png)
+
+---
+
 ## Tech Stack
 
 ### Backend
