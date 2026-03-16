@@ -1,0 +1,298 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Demo — Toko Kue Laris Manis</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: #fef9f0;
+      color: #1a1a1a;
+    }
+
+    /* Fake UMKM website */
+    header {
+      background: #e67e22;
+      color: white;
+      padding: 16px 24px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    header h1 { font-size: 22px; font-weight: 700; }
+    header p { font-size: 13px; opacity: 0.85; }
+
+    nav {
+      background: white;
+      border-bottom: 1px solid #eee;
+      padding: 0 24px;
+      display: flex;
+      gap: 20px;
+    }
+    nav a {
+      display: inline-block;
+      padding: 14px 0;
+      color: #555;
+      text-decoration: none;
+      font-size: 14px;
+      border-bottom: 2px solid transparent;
+    }
+    nav a:hover, nav a.active { color: #e67e22; border-color: #e67e22; }
+
+    .hero {
+      background: linear-gradient(135deg, #e67e22, #f39c12);
+      color: white;
+      padding: 60px 24px;
+      text-align: center;
+    }
+    .hero h2 { font-size: 32px; font-weight: 800; margin-bottom: 12px; }
+    .hero p { font-size: 16px; opacity: 0.9; max-width: 480px; margin: 0 auto 24px; }
+    .hero button {
+      background: white;
+      color: #e67e22;
+      border: none;
+      padding: 12px 28px;
+      border-radius: 50px;
+      font-size: 15px;
+      font-weight: 600;
+      cursor: pointer;
+    }
+
+    .products {
+      padding: 40px 24px;
+      max-width: 900px;
+      margin: 0 auto;
+    }
+    .products h3 { font-size: 22px; font-weight: 700; margin-bottom: 20px; color: #333; }
+    .product-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+    .product-card {
+      background: white;
+      border-radius: 12px;
+      overflow: hidden;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.08);
+    }
+    .product-card-img {
+      height: 140px;
+      background: linear-gradient(135deg, #f6d365, #fda085);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 48px;
+    }
+    .product-card-body { padding: 12px; }
+    .product-card-body h4 { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+    .product-card-body p { font-size: 12px; color: #888; }
+    .product-card-body .price {
+      font-size: 15px;
+      font-weight: 700;
+      color: #e67e22;
+      margin-top: 8px;
+    }
+
+    footer {
+      background: #333;
+      color: #aaa;
+      text-align: center;
+      padding: 20px;
+      font-size: 13px;
+      margin-top: 60px;
+    }
+
+    /* Widget config panel (dev only) */
+    .config-panel {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      background: white;
+      border-radius: 12px;
+      padding: 14px;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.12);
+      z-index: 9999;
+      width: 220px;
+      font-size: 12px;
+    }
+    .config-panel h5 {
+      font-size: 11px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+    .config-panel label { display: block; margin-bottom: 8px; color: #555; }
+    .config-panel input, .config-panel select {
+      width: 100%;
+      border: 1px solid #e0e0e0;
+      border-radius: 6px;
+      padding: 5px 8px;
+      font-size: 12px;
+      margin-top: 3px;
+    }
+    .config-panel button {
+      width: 100%;
+      background: #e67e22;
+      color: white;
+      border: none;
+      border-radius: 6px;
+      padding: 7px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      margin-top: 6px;
+    }
+    .config-panel .note {
+      color: #aaa;
+      font-size: 10.5px;
+      margin-top: 6px;
+      line-height: 1.4;
+    }
+  </style>
+</head>
+<body>
+
+  <!-- ── Dev Config Panel ─────────────────────────────────────────────────── -->
+  <div class="config-panel">
+    <h5>🔧 Widget Config (Dev)</h5>
+    <label>
+      API Key
+      <input id="cfg-apikey" type="text" value="ck_demo_key_1234567890" placeholder="ck_..." />
+    </label>
+    <label>
+      Warna Utama
+      <input id="cfg-color" type="color" value="#e67e22" />
+    </label>
+    <label>
+      Posisi
+      <select id="cfg-position">
+        <option value="bottom-right">Kanan Bawah</option>
+        <option value="bottom-left">Kiri Bawah</option>
+      </select>
+    </label>
+    <label>
+      Nama Bot
+      <input id="cfg-botname" type="text" value="Asisten Toko Kue" />
+    </label>
+    <label>
+      Base URL
+      <input id="cfg-baseurl" type="text" value="http://localhost:3000" placeholder="http://localhost:3000" />
+    </label>
+    <button onclick="reloadWidget()">Reload Widget</button>
+    <p class="note">Widget akan inject ke halaman ini. Pastikan backend berjalan di Base URL yang diset.</p>
+  </div>
+
+  <!-- ── UMKM Demo Website ─────────────────────────────────────────────────── -->
+  <header>
+    <div>🎂</div>
+    <div>
+      <h1>Toko Kue Laris Manis</h1>
+      <p>Kue Tradisional & Modern Terenak di Kota</p>
+    </div>
+  </header>
+
+  <nav>
+    <a href="#" class="active">Beranda</a>
+    <a href="#">Menu</a>
+    <a href="#">Tentang Kami</a>
+    <a href="#">Kontak</a>
+    <a href="#">Pesan Sekarang</a>
+  </nav>
+
+  <div class="hero">
+    <h2>Kue Spesial untuk Setiap Momen 🎉</h2>
+    <p>Dibuat dengan bahan pilihan, dikirim dengan cinta. Tersedia untuk acara ulang tahun, pernikahan, dan hari-hari spesial Anda.</p>
+    <button>Lihat Menu Lengkap</button>
+  </div>
+
+  <section class="products">
+    <h3>Menu Unggulan</h3>
+    <div class="product-grid">
+      <div class="product-card">
+        <div class="product-card-img">🎂</div>
+        <div class="product-card-body">
+          <h4>Kue Ulang Tahun Premium</h4>
+          <p>Vanilla / Coklat / Red Velvet</p>
+          <div class="price">Rp 350.000</div>
+        </div>
+      </div>
+      <div class="product-card">
+        <div class="product-card-img">🧁</div>
+        <div class="product-card-body">
+          <h4>Cupcake Box (12 pcs)</h4>
+          <p>Aneka rasa tersedia</p>
+          <div class="price">Rp 180.000</div>
+        </div>
+      </div>
+      <div class="product-card">
+        <div class="product-card-img">🍰</div>
+        <div class="product-card-body">
+          <h4>Slice Cake Tiramisu</h4>
+          <p>Import ingredients</p>
+          <div class="price">Rp 45.000</div>
+        </div>
+      </div>
+      <div class="product-card">
+        <div class="product-card-img">🥐</div>
+        <div class="product-card-body">
+          <h4>Croissant Butter</h4>
+          <p>Fresh every morning</p>
+          <div class="price">Rp 25.000</div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <p>© 2026 Toko Kue Laris Manis · Jl. Raya Mawar No. 12, Jakarta · WhatsApp: 0812-3456-7890</p>
+    <p style="margin-top:6px;font-size:11px">Powered by <strong>AI Chatbot Hub</strong></p>
+  </footer>
+
+  <!-- ── ChatbotHub Widget ──────────────────────────────────────────────────── -->
+  <script>
+    // Default config — overridden by reloadWidget()
+    window.ChatbotHubConfig = {
+      apiKey: 'ck_demo_key_1234567890',
+      position: 'bottom-right',
+      primaryColor: '#e67e22',
+      welcomeText: 'Halo! Selamat datang di Toko Kue Laris Manis 🎂 Ada yang bisa kami bantu?',
+      botName: 'Asisten Toko Kue',
+      baseUrl: 'http://localhost:3000',
+    };
+
+    function reloadWidget() {
+      // Remove existing widget
+      const existing = document.getElementById('chub-widget');
+      if (existing) existing.remove();
+      const existingStyle = document.getElementById('chub-styles');
+      if (existingStyle) existingStyle.remove();
+
+      // Remove old script
+      const oldScript = document.getElementById('chub-script');
+      if (oldScript) oldScript.remove();
+
+      // Update config
+      window.ChatbotHubConfig = {
+        apiKey: document.getElementById('cfg-apikey').value || 'ck_demo',
+        position: document.getElementById('cfg-position').value,
+        primaryColor: document.getElementById('cfg-color').value,
+        botName: document.getElementById('cfg-botname').value || 'AI Assistant',
+        baseUrl: document.getElementById('cfg-baseurl').value || 'http://localhost:3000',
+        welcomeText: 'Halo! Selamat datang di Toko Kue Laris Manis 🎂 Ada yang bisa kami bantu?',
+      };
+
+      // Re-inject widget script
+      const script = document.createElement('script');
+      script.id = 'chub-script';
+      script.src = '../dist/widget.js?' + Date.now();
+      document.body.appendChild(script);
+    }
+  </script>
+  <script id="chub-script" src="../dist/widget.js"></script>
+
+</body>
+</html>
