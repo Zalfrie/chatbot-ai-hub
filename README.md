@@ -154,6 +154,55 @@ NODE_ENV=development
 
 ---
 
+## Next Steps
+
+### RAG (Retrieval-Augmented Generation) + Vector Search
+
+Peningkatan selanjutnya adalah mengganti knowledge base berbasis teks biasa dengan sistem **RAG** menggunakan vector database, sehingga chatbot bisa menjawab lebih akurat berdasarkan dokumen yang relevan.
+
+#### Rencana Implementasi
+
+| Komponen | Teknologi | Keterangan |
+|---|---|---|
+| **Vector Database** | pgvector (PostgreSQL extension) | Simpan embedding langsung di DB yang sudah ada |
+| **Embedding Model** | `text-embedding-3-small` (OpenAI) / Groq | Konversi teks knowledge base → vector |
+| **Similarity Search** | Cosine similarity via pgvector | Cari knowledge yang paling relevan per query |
+| **Chunking** | Sliding window (512 token, overlap 50) | Pecah dokumen panjang menjadi chunk yang optimal |
+
+#### Alur RAG
+
+```
+User Message
+     │
+     ▼
+Embedding Model → query vector
+     │
+     ▼
+pgvector similarity search → top-K chunks relevan
+     │
+     ▼
+Inject chunks ke system prompt
+     │
+     ▼
+AI Provider (Groq / Claude) → response kontekstual
+```
+
+#### Perubahan Schema DB
+
+```sql
+-- Tambah kolom vector ke tabel knowledge_bases
+ALTER TABLE knowledge_bases ADD COLUMN embedding vector(1536);
+CREATE INDEX ON knowledge_bases USING ivfflat (embedding vector_cosine_ops);
+```
+
+#### Manfaat
+
+- Chatbot bisa memproses dokumen panjang (katalog produk, FAQ lengkap, SOP)
+- Jawaban lebih relevan karena hanya inject context yang diperlukan
+- Mengurangi token usage → lebih hemat biaya AI provider
+
+---
+
 ## Lihat juga
 
 - [`planning.md`](./planning.md) — Spesifikasi lengkap, schema DB, flow detail, seed data demo
