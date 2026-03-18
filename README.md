@@ -142,6 +142,8 @@ Pelanggan WA / Pengunjung Web
 | 6 | **Hardening** — Rate limiting, billing hooks, security audit | Selesai |
 | 7 | **Production-Ready** — Winston logger, PM2 config, JWT refresh, error handling | Selesai |
 | 8 | **RAG + Vector Search** — Pinecone embedding, chunking, import PDF/URL/DOCX | Selesai |
+| 9 | **SSE Streaming** — Real-time streaming response via Server-Sent Events (widget + dashboard) | Selesai |
+| 10 | **Tool Use / Function Calling** — AI bisa panggil webhook UMKM secara real-time (agentic loop) | Selesai |
 
 ---
 
@@ -170,6 +172,105 @@ NODE_ENV=development
 # RAG / Vector Search (Phase 8)
 PINECONE_API_KEY=
 PINECONE_INDEX_NAME=chatbot-hub-knowledge
+```
+
+---
+
+## Phase 9 — SSE Streaming
+
+Semua response AI kini bisa di-stream secara real-time ke browser menggunakan **Server-Sent Events (SSE)**.
+
+### Endpoint Streaming
+
+| Endpoint | Auth | Keterangan |
+|---|---|---|
+| `POST /v1/chat/stream` | API Key | Widget embed — stream ke pengunjung web |
+| `POST /api/clients/:id/conversations/stream/preview` | JWT | Dashboard — uji bot secara live |
+
+### SSE Event Format
+
+```
+data: {"type":"session","session_id":"<uuid>"}
+data: {"type":"chunk","content":"Halo kak!"}
+data: {"type":"tool_call","tool_name":"cek_stok","args":{...}}
+data: {"type":"tool_result","tool_name":"cek_stok","result":"Stok: 3 loyang"}
+data: {"type":"done","tokens_used":85}
+data: {"type":"error","message":"..."}
+```
+
+---
+
+## Phase 10 — Tool Use / Function Calling
+
+Setiap tenant (UMKM) bisa mendaftarkan **tools** — fungsi yang dipanggil AI secara otomatis saat menjawab pelanggan. Hub berperan sebagai **orchestrator**: AI request tool call → hub eksekusi via HTTP ke sistem UMKM → hasil dikirim balik ke AI.
+
+### Contoh Use Case
+
+| UMKM | Tool | Fungsi |
+|---|---|---|
+| Toko Kue | `cek_stok_kue(nama_produk)` | Cek stok real-time dari sistem toko |
+| Toko Online | `cek_status_order(nomor_order)` | Cek status pengiriman |
+| Restoran | `cek_meja_tersedia(tanggal, jam)` | Cek ketersediaan meja |
+
+### Agentic Loop Flow
+
+```
+User Message
+     │
+     ▼
+[Chat Service] — load config, knowledge, tools
+     │
+     ▼
+[AI Provider] ← messages + toolDefinitions
+     │
+     ├─ response.toolCalls? → YES → [Tool Executor]
+     │                                     │
+     │                               HTTP ke webhook UMKM
+     │                                     │
+     │                              append tool_result ke messages
+     │                                     │
+     │                              loop balik ke AI (max 5 iterasi)
+     │
+     └─ response.content (text) → NO → Final Answer → Return to user
+```
+
+### Fitur
+
+- **Tool Registry** — CRUD tools per tenant via dashboard (`/clients/:id/tools`)
+- **Test Panel** — uji tool dengan input manual langsung dari dashboard
+- **Kill switch** — toggle `tools_enabled` per chatbot (off = perilaku normal seperti sebelumnya)
+- **Timeout 10 detik** — jika webhook tidak respons, AI diberi tahu dan menjawab berdasarkan pengetahuan yang ada
+- **Max 5 iterasi** — mencegah infinite agentic loop
+- **Multi-provider** — Claude (native `tool_use` blocks) dan Groq (OpenAI-compatible `tool_calls`)
+- **SSE events baru** — dashboard tampilkan "thinking steps" saat AI memanggil tool
+
+### API Endpoints Tool
+
+| Method | Path | Keterangan |
+|---|---|---|
+| `GET` | `/api/clients/:id/tools` | List semua tools tenant |
+| `POST` | `/api/clients/:id/tools` | Buat tool baru |
+| `PUT` | `/api/clients/:id/tools/:tid` | Update tool |
+| `DELETE` | `/api/clients/:id/tools/:tid` | Hapus tool |
+| `POST` | `/api/clients/:id/tools/:tid/test` | Test eksekusi tool (dari dashboard) |
+
+### Payload Webhook (dikirim hub ke sistem UMKM)
+
+```json
+POST https://your-system.com/webhook/tool
+Content-Type: application/json
+
+{
+  "tool_name": "cek_stok_kue",
+  "args": { "nama_produk": "Red Velvet" },
+  "client_id": 1,
+  "timestamp": "2025-01-15T10:30:00Z"
+}
+```
+
+Expected response dari sistem UMKM:
+```json
+{ "result": "Stok Red Velvet tersedia: 3 loyang. Bisa dipesan untuk hari ini." }
 ```
 
 ---

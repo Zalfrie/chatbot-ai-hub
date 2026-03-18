@@ -11,6 +11,7 @@ import chatbotRoutes from './modules/chatbot/chatbot.routes';
 import knowledgeRoutes from './modules/knowledge/knowledge.routes';
 import conversationRoutes from './modules/chat/conversation.routes';
 import analyticsRoutes from './modules/analytics/analytics.routes';
+import toolRoutes from './modules/tools/tool.routes';
 
 const app = express();
 
@@ -55,6 +56,7 @@ app.use('/api/clients/:clientId/chatbot', chatbotRoutes);
 app.use('/api/clients/:clientId/knowledge', knowledgeRoutes);
 app.use('/api/clients/:clientId/conversations', conversationRoutes);
 app.use('/api/clients/:clientId/analytics', analyticsRoutes);
+app.use('/api/clients/:clientId/tools', toolRoutes);
 // WA management: POST/GET /api/clients/:id/wa/connect|status|disconnect
 app.use('/api/clients/:id/wa', waRoutes);
 

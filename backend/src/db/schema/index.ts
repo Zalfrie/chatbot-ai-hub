@@ -8,3 +8,4 @@ export * from './messages.schema';
 export * from './usage_logs.schema';
 export * from './admin_users.schema';
 export * from './knowledge_sources.schema';
+export * from './tenant_tools.schema';

@@ -1,6 +1,15 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AIProvider, ChatRequest, ChatResponse } from './ai.interface';
+import { AIProvider, ChatMessage, ChatRequest, ChatResponse } from './ai.interface';
 import { env } from '../../config/env';
+
+/** Gemini doesn't support tool_use blocks — extract plain text from any content type. */
+function extractText(content: ChatMessage['content']): string {
+  if (typeof content === 'string') return content;
+  return content
+    .filter((p): p is Extract<typeof p, { type: 'text' }> => p.type === 'text')
+    .map((p) => p.text)
+    .join('');
+}
 
 export class GeminiProvider implements AIProvider {
   private client: GoogleGenerativeAI;
@@ -22,10 +31,9 @@ export class GeminiProvider implements AIProvider {
       },
     });
 
-    // All messages except the last one become history
     const history = request.messages.slice(0, -1).map((msg) => ({
       role: msg.role === 'assistant' ? 'model' : 'user',
-      parts: [{ text: msg.content }],
+      parts: [{ text: extractText(msg.content) }],
     }));
 
     const lastMessage = request.messages[request.messages.length - 1];
@@ -34,7 +42,7 @@ export class GeminiProvider implements AIProvider {
     }
 
     const chat = model.startChat({ history });
-    const result = await chat.sendMessage(lastMessage.content);
+    const result = await chat.sendMessage(extractText(lastMessage.content));
     const text = result.response.text();
 
     if (!text) {
@@ -46,5 +54,36 @@ export class GeminiProvider implements AIProvider {
       tokensUsed: result.response.usageMetadata?.totalTokenCount ?? 0,
       model: request.model,
     };
+  }
+
+  async *chatStream(request: ChatRequest): AsyncGenerator<string> {
+    const model = this.client.getGenerativeModel({
+      model: request.model,
+      systemInstruction: request.system,
+      generationConfig: {
+        temperature: request.temperature,
+        maxOutputTokens: request.maxTokens,
+      },
+    });
+
+    const history = request.messages.slice(0, -1).map((msg) => ({
+      role: msg.role === 'assistant' ? 'model' : 'user',
+      parts: [{ text: extractText(msg.content) }],
+    }));
+
+    const lastMessage = request.messages[request.messages.length - 1];
+    if (!lastMessage) {
+      throw new Error('No messages provided');
+    }
+
+    const chat = model.startChat({ history });
+    const result = await chat.sendMessageStream(extractText(lastMessage.content));
+
+    for await (const chunk of result.stream) {
+      const text = chunk.text();
+      if (text) {
+        yield text;
+      }
+    }
   }
 }

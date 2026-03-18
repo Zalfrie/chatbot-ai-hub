@@ -40,6 +40,7 @@ const tabs = computed(() => [
   { label: 'Knowledge', to: `/clients/${props.clientId}/knowledge` },
   { label: 'WhatsApp', to: `/clients/${props.clientId}/whatsapp` },
   { label: 'Percakapan', to: `/clients/${props.clientId}/conversations` },
+  { label: 'Tools', to: `/clients/${props.clientId}/tools` },
   { label: 'Analitik', to: `/clients/${props.clientId}/analytics` },
 ])
 

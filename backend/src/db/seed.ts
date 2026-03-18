@@ -199,6 +199,34 @@ J: Bisa! Cek Instagram kami @larismaniscake atau minta kakak kirimkan foto langs
       `);
     }
 
+    // Seed demo tool: cek_stok_kue for Toko Kue Laris Manis
+    await db.execute(`
+      INSERT INTO tenant_tools (client_id, name, description, parameters_schema,
+        webhook_url, http_method, timeout_ms, is_active)
+      SELECT
+        c.id,
+        'cek_stok_kue',
+        'Cek ketersediaan stok kue berdasarkan nama produk. Gunakan tool ini ketika pelanggan bertanya apakah produk tersedia atau berapa sisa stoknya.',
+        '{
+          "type": "object",
+          "properties": {
+            "nama_produk": {
+              "type": "string",
+              "description": "Nama kue yang ingin dicek stoknya"
+            }
+          },
+          "required": ["nama_produk"]
+        }',
+        'https://webhook.site/replace-with-your-id',
+        'POST',
+        5000,
+        TRUE
+      FROM clients c WHERE c.slug = 'toko-kue-laris-manis'
+      ON CONFLICT (client_id, name) DO NOTHING
+    `);
+
+    console.log('   📌 Demo tool: cek_stok_kue (update webhook_url in tenant_tools to test)');
+
     // Seed WA session (disconnected state)
     await db.execute(`
       INSERT INTO wa_sessions (client_id, wa_number, status)

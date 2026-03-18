@@ -29,6 +29,7 @@ export const chatbots = pgTable('chatbots', {
   maxTokens: integer('max_tokens').default(1000),
   channel: channelEnum('channel').default('both'),
   isActive: boolean('is_active').default(true),
+  toolsEnabled: boolean('tools_enabled').default(false),
   createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 }, (table) => [

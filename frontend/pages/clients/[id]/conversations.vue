@@ -66,64 +66,152 @@
 
       <!-- Messages panel -->
       <div class="lg:col-span-3 card flex flex-col overflow-hidden">
-        <div v-if="!selectedConv" class="flex-1 flex items-center justify-center text-center p-8">
-          <div>
-            <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-              </svg>
-            </div>
-            <p class="text-slate-500 font-medium">Pilih percakapan</p>
-            <p class="text-slate-400 text-sm mt-1">Klik percakapan di sebelah kiri untuk melihat pesan</p>
-          </div>
+        <!-- Tab bar: History / Test Bot -->
+        <div class="flex border-b border-slate-100 flex-shrink-0">
+          <button
+            :class="['flex-1 py-2.5 text-xs font-medium transition-colors', activeTab === 'history' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600']"
+            @click="activeTab = 'history'"
+          >
+            Riwayat
+          </button>
+          <button
+            :class="['flex-1 py-2.5 text-xs font-medium transition-colors', activeTab === 'test' ? 'text-indigo-600 border-b-2 border-indigo-600' : 'text-slate-400 hover:text-slate-600']"
+            @click="activeTab = 'test'"
+          >
+            Uji Bot (Streaming)
+          </button>
         </div>
 
-        <template v-else>
-          <!-- Header -->
-          <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
-            <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-sm font-semibold flex-shrink-0">
-              {{ (selectedConv.waNumber || 'W').slice(0, 1) }}
-            </div>
+        <!-- ── History tab ── -->
+        <template v-if="activeTab === 'history'">
+          <div v-if="!selectedConv" class="flex-1 flex items-center justify-center text-center p-8">
             <div>
-              <p class="font-medium text-slate-900 text-sm">
-                {{ selectedConv.waNumber || selectedConv.sessionId?.slice(0, 16) + '...' || 'Pengunjung' }}
-              </p>
-              <p class="text-xs text-slate-400">
-                {{ selectedConv.messageCount }} pesan &middot; Terakhir {{ formatRelativeDate(selectedConv.lastMessageAt) }}
-              </p>
+              <div class="w-12 h-12 bg-slate-100 rounded-full flex items-center justify-center mx-auto mb-3">
+                <svg class="w-6 h-6 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                </svg>
+              </div>
+              <p class="text-slate-500 font-medium">Pilih percakapan</p>
+              <p class="text-slate-400 text-sm mt-1">Klik percakapan di sebelah kiri untuk melihat pesan</p>
             </div>
-            <span :class="selectedConv.channel === 'whatsapp' ? 'badge-green' : 'badge-blue'" class="ml-auto">
-              {{ selectedConv.channel === 'whatsapp' ? 'WhatsApp' : 'Web Widget' }}
-            </span>
           </div>
 
-          <!-- Messages -->
-          <div ref="messagesEl" class="flex-1 overflow-y-auto p-4 space-y-3">
-            <div v-if="msgPending" class="text-center py-4">
-              <div class="spinner text-indigo-600 mx-auto" />
+          <template v-else>
+            <!-- Header -->
+            <div class="px-4 py-3 border-b border-slate-100 flex items-center gap-3">
+              <div class="w-8 h-8 bg-indigo-100 rounded-full flex items-center justify-center text-indigo-600 text-sm font-semibold flex-shrink-0">
+                {{ (selectedConv.waNumber || 'W').slice(0, 1) }}
+              </div>
+              <div>
+                <p class="font-medium text-slate-900 text-sm">
+                  {{ selectedConv.waNumber || selectedConv.sessionId?.slice(0, 16) + '...' || 'Pengunjung' }}
+                </p>
+                <p class="text-xs text-slate-400">
+                  {{ selectedConv.messageCount }} pesan &middot; Terakhir {{ formatRelativeDate(selectedConv.lastMessageAt) }}
+                </p>
+              </div>
+              <span :class="selectedConv.channel === 'whatsapp' ? 'badge-green' : 'badge-blue'" class="ml-auto">
+                {{ selectedConv.channel === 'whatsapp' ? 'WhatsApp' : 'Web Widget' }}
+              </span>
             </div>
-            <template v-else>
-              <div
-                v-for="msg in messages"
-                :key="msg.id"
-                :class="['flex', msg.role === 'user' ? 'justify-end' : 'justify-start']"
-              >
+
+            <!-- Messages -->
+            <div ref="messagesEl" class="flex-1 overflow-y-auto p-4 space-y-3">
+              <div v-if="msgPending" class="text-center py-4">
+                <div class="spinner text-indigo-600 mx-auto" />
+              </div>
+              <template v-else>
+                <div
+                  v-for="msg in messages"
+                  :key="msg.id"
+                  :class="['flex', msg.role === 'user' ? 'justify-end' : 'justify-start']"
+                >
+                  <div
+                    :class="[
+                      'max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
+                      msg.role === 'user'
+                        ? 'bg-indigo-600 text-white rounded-br-sm'
+                        : 'bg-slate-100 text-slate-800 rounded-bl-sm',
+                    ]"
+                  >
+                    <p class="whitespace-pre-wrap">{{ msg.content }}</p>
+                    <p :class="['text-xs mt-1', msg.role === 'user' ? 'text-indigo-200' : 'text-slate-400']">
+                      {{ formatTime(msg.createdAt) }}
+                    </p>
+                  </div>
+                </div>
+              </template>
+            </div>
+          </template>
+        </template>
+
+        <!-- ── Test Bot (Streaming) tab ── -->
+        <template v-else>
+          <!-- Preview messages -->
+          <div ref="previewEl" class="flex-1 overflow-y-auto p-4 space-y-3">
+            <div v-if="previewMessages.length === 0" class="flex items-center justify-center h-full">
+              <p class="text-slate-400 text-sm text-center">
+                Kirim pesan untuk menguji bot dengan streaming live.
+              </p>
+            </div>
+            <div
+              v-for="(msg, i) in previewMessages"
+              :key="i"
+              :class="['flex', msg.role === 'user' ? 'justify-end' : 'justify-start']"
+            >
+              <div class="flex flex-col gap-1.5 max-w-[80%]">
+                <!-- Tool steps (thinking steps) -->
+                <template v-if="msg.role === 'assistant' && msg.toolSteps?.length">
+                  <details
+                    v-for="(step, si) in msg.toolSteps"
+                    :key="si"
+                    class="bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 text-xs"
+                  >
+                    <summary class="cursor-pointer select-none text-amber-700 font-medium flex items-center gap-1.5">
+                      <span v-if="step.pending" class="inline-block w-3 h-3 border-2 border-amber-500 border-t-transparent rounded-full animate-spin" />
+                      <span v-else class="text-amber-500">✓</span>
+                      Mengecek: <code>{{ step.toolName }}({{ JSON.stringify(step.args) }})</code>
+                    </summary>
+                    <p v-if="step.result" class="mt-1.5 text-slate-600 whitespace-pre-wrap">{{ step.result }}</p>
+                  </details>
+                </template>
+
                 <div
                   :class="[
-                    'max-w-[75%] px-4 py-2.5 rounded-2xl text-sm leading-relaxed',
+                    'px-4 py-2.5 rounded-2xl text-sm leading-relaxed relative',
                     msg.role === 'user'
                       ? 'bg-indigo-600 text-white rounded-br-sm'
                       : 'bg-slate-100 text-slate-800 rounded-bl-sm',
                   ]"
                 >
-                  <p class="whitespace-pre-wrap">{{ msg.content }}</p>
-                  <p :class="['text-xs mt-1', msg.role === 'user' ? 'text-indigo-200' : 'text-slate-400']">
-                    {{ formatTime(msg.createdAt) }}
+                  <p class="whitespace-pre-wrap">{{ msg.content }}<span v-if="msg.streaming && !msg.toolSteps?.some(s => s.pending)" class="inline-block w-[2px] h-[1em] bg-current ml-0.5 align-middle animate-pulse" /></p>
+                  <p v-if="!msg.streaming" :class="['text-xs mt-1', msg.role === 'user' ? 'text-indigo-200' : 'text-slate-400']">
+                    {{ msg.time }}
                   </p>
                 </div>
               </div>
-            </template>
+            </div>
+          </div>
+
+          <!-- Test input -->
+          <div class="px-3 py-2.5 border-t border-slate-100 flex gap-2">
+            <input
+              v-model="previewInput"
+              type="text"
+              class="form-input flex-1 text-sm"
+              placeholder="Ketik pesan untuk uji bot..."
+              :disabled="isStreaming"
+              @keydown.enter.prevent="sendPreviewMessage"
+            />
+            <button
+              class="btn-primary px-4 py-2 text-sm disabled:opacity-50"
+              :disabled="isStreaming || !previewInput.trim()"
+              @click="sendPreviewMessage"
+            >
+              <span v-if="isStreaming">...</span>
+              <span v-else>Kirim</span>
+            </button>
           </div>
         </template>
       </div>
@@ -138,8 +226,13 @@ definePageMeta({ middleware: 'auth' })
 
 const route = useRoute()
 const api = useApi()
+const { streamPreview } = useSSE()
 const clientId = route.params.id as string
 
+// ── Tab state ──────────────────────────────────────────────────────────────
+const activeTab = ref<'history' | 'test'>('history')
+
+// ── History tab ────────────────────────────────────────────────────────────
 const searchConv = ref('')
 const filterChannel = ref<'' | 'whatsapp' | 'web'>('')
 const selectedConv = ref<Conversation | null>(null)
@@ -184,12 +277,113 @@ const messages = computed(() => msgData.value ?? [])
 async function selectConversation(conv: Conversation) {
   selectedConv.value = conv
   await fetchMessages()
-  // Scroll to bottom
   await nextTick()
   if (messagesEl.value) {
     messagesEl.value.scrollTop = messagesEl.value.scrollHeight
   }
 }
+
+// ── Test Bot (Streaming) tab ───────────────────────────────────────────────
+
+interface ToolStep {
+  toolName: string
+  args: Record<string, unknown>
+  result?: string
+  pending: boolean
+}
+
+interface PreviewMessage {
+  role: 'user' | 'assistant'
+  content: string
+  streaming: boolean
+  time: string
+  toolSteps?: ToolStep[]
+}
+
+const previewMessages = ref<PreviewMessage[]>([])
+const previewInput = ref('')
+const isStreaming = ref(false)
+const previewEl = ref<HTMLElement | null>(null)
+
+let streamAbort: AbortController | null = null
+
+async function sendPreviewMessage() {
+  const text = previewInput.value.trim()
+  if (!text || isStreaming.value) return
+
+  previewInput.value = ''
+  isStreaming.value = true
+
+  // Add user message
+  previewMessages.value.push({
+    role: 'user',
+    content: text,
+    streaming: false,
+    time: fmtNow(),
+  })
+
+  // Add placeholder for bot response
+  const botMsg: PreviewMessage = { role: 'assistant', content: '', streaming: true, time: '' }
+  previewMessages.value.push(botMsg)
+
+  await nextTick()
+  scrollPreview()
+
+  streamAbort = new AbortController()
+
+  try {
+    await streamPreview(
+      clientId,
+      { message: text },
+      {
+        onEvent(event: Record<string, unknown>) {
+          if (event.type === 'tool_call') {
+            if (!botMsg.toolSteps) botMsg.toolSteps = []
+            botMsg.toolSteps.push({
+              toolName: event.tool_name as string,
+              args: event.args as Record<string, unknown>,
+              pending: true,
+            })
+            scrollPreview()
+          } else if (event.type === 'tool_result') {
+            const step = botMsg.toolSteps?.find(
+              (s) => s.toolName === event.tool_name && s.pending,
+            )
+            if (step) {
+              step.result = event.result as string
+              step.pending = false
+            }
+            scrollPreview()
+          } else if (event.type === 'chunk') {
+            botMsg.content += event.content as string
+            scrollPreview()
+          } else if (event.type === 'done') {
+            botMsg.streaming = false
+            botMsg.time = fmtNow()
+          } else if (event.type === 'error') {
+            botMsg.streaming = false
+            botMsg.content = botMsg.content || (event.message as string)
+            botMsg.time = fmtNow()
+          }
+        },
+      },
+      streamAbort.signal,
+    )
+  } finally {
+    botMsg.streaming = false
+    if (!botMsg.time) botMsg.time = fmtNow()
+    isStreaming.value = false
+    streamAbort = null
+  }
+}
+
+function scrollPreview() {
+  nextTick(() => {
+    if (previewEl.value) previewEl.value.scrollTop = previewEl.value.scrollHeight
+  })
+}
+
+// ── Shared utils ───────────────────────────────────────────────────────────
 
 function formatRelativeDate(dateStr: string) {
   const date = new Date(dateStr)
@@ -207,9 +401,10 @@ function formatRelativeDate(dateStr: string) {
 }
 
 function formatTime(dateStr: string) {
-  return new Intl.DateTimeFormat('id-ID', {
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(new Date(dateStr))
+  return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date(dateStr))
+}
+
+function fmtNow() {
+  return new Intl.DateTimeFormat('id-ID', { hour: '2-digit', minute: '2-digit' }).format(new Date())
 }
 </script>
