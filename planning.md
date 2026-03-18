@@ -19,8 +19,16 @@
 9. [Frontend (Nuxt.js + TypeScript)](#frontend)
 10. [API Endpoints](#api-endpoints)
 11. [Fase Development](#fase-development)
-12. [RAG + Vector Search (Fase 8)](#rag--vector-search-fase-8)
-13. [Catatan Penting](#catatan-penting)
+    - Phase 1–6 (selesai)
+    - Phase 9–12: AI Capabilities
+    - Phase 13–16: Billing, Invoice & Payment
+    - Phase 17: Auth UMKM & Multi-portal
+    - Phase 18: Landing Page & Halaman Publik
+12. [Pricing & Billing Model](#pricing--billing-model)
+13. [Database Model Tambahan — Billing](#database-model-tambahan--billing)
+14. [Auth UMKM — Sistem Login & Registrasi](#auth-umkm--sistem-login--registrasi)
+15. [Landing Page & Halaman Publik](#landing-page--halaman-publik)
+16. [Catatan Penting](#catatan-penting)
 
 ---
 
@@ -1419,6 +1427,8 @@ GET    /api/clients/:id/analytics?from=&to=      # Usage stats per periode
 
 ## Fase Development
 
+### Phase 1–8 ✅ Selesai
+
 | Fase | Scope | Detail |
 |---|---|---|
 | **Fase 1** | Foundation | Setup project Node.js/TS, koneksi PostgreSQL + Redis, schema migration, CRUD client & chatbot |
@@ -1426,843 +1436,823 @@ GET    /api/clients/:id/analytics?from=&to=      # Usage stats per periode
 | **Fase 3** | WhatsApp | Integrasi Baileys, session management per client, QR code via WebSocket, incoming message handler |
 | **Fase 4** | Dashboard | Nuxt.js admin dashboard, semua halaman manajemen, QR display realtime |
 | **Fase 5** | Embed Widget | Vanilla TS widget, deploy widget.js, dokumentasi cara embed untuk UMKM |
-| **Fase 6** | Unit Testing | Vitest setup, unit test semua layer, integration test endpoint, coverage minimal 70% |
-| **Fase 7** | Hardening | Rate limiting, usage billing, error handling, monitoring (PM2 + log), security audit |
-| **Fase 8** | RAG + Vector Search | pgvector setup, chunking, embedding service, vector search, import file, crawling URL, AI-assisted input |
+| **Fase 6** | Hardening | Rate limiting, usage billing, error handling, monitoring (PM2 + log), security audit |
+| **Fase 7–8** | *(selesai)* | *(detail di dokumen terpisah)* |
 
 ---
 
-## RAG + Vector Search (Fase 8)
+### Phase 9–12: AI Capabilities
 
-> Implementasi Retrieval Augmented Generation menggunakan **Pinecone** (cloud vector database) — tidak perlu install apapun di lokal, cukup API key.
+> Urutan berdasarkan ROI tertinggi. Kerjakan Phase 9 & 10 back-to-back karena keduanya langsung mengubah UX secara signifikan.
 
-### Mengapa RAG?
+| Fase | Scope | Prioritas | Detail |
+|---|---|---|---|
+| **Phase 9** | Streaming Responses | 🔴 Tinggi | Backend SSE + update widget real-time. Respons muncul word-by-word. Modifikasi `chat.service.ts` untuk stream Claude API, update embed widget pakai `EventSource`, Baileys kirim via `sendMessage` incremental |
+| **Phase 10** | Tool Use / Function Calling | 🔴 Tinggi | Per-tenant custom tools. AI bisa bertindak, bukan hanya menjawab. Contoh tools: `check_order_status(order_id)`, `get_product_availability(product_name)`, `get_store_hours()`, `create_reservation(date, time, party_size)`. Schema tool definition disimpan per-tenant di DB |
+| **Phase 11** | Prompt Caching | 🟡 Medium | System prompt + knowledge base di-cache di Anthropic. Hemat token & turunkan latency. Tambah `cache_control` di `prompt-builder.ts`. Cocok setelah traffic mulai naik |
+| **Phase 12** | Vision / Multimodal | 🟡 Medium | Handle gambar dari WhatsApp. Baileys sudah support terima media. Customer kirim foto produk → AI analisa & jawab. Tambah image handler di `wa.handler.ts`, encode base64, kirim ke Claude vision endpoint |
 
-| Kondisi | Tanpa RAG | Dengan RAG |
+**Bonus Phase — Dashboard AI Assistant** *(dikerjakan saat ada bandwidth, cocok sebagai fitur plan Pro)*
+- Auto-generate knowledge base entries dari deskripsi produk yang diketik UMKM
+- Suggest perbaikan system prompt chatbot berdasarkan log percakapan
+- Summarize conversation logs & analytics harian
+- Implementasi via "Claude-in-Claude" di Nuxt dashboard
+
+---
+
+### Phase 13–16: Billing, Invoice & Payment
+
+> Fitur lengkap pengelolaan tagihan UMKM. Kerjakan setelah Phase 9–10 selesai agar platform sudah stabil sebelum masuk ke domain keuangan.
+
+| Fase | Scope | Estimasi | Detail |
+|---|---|---|---|
+| **Phase 13** | Usage Dashboard + Threshold Notifikasi | 2–3 minggu | Halaman usage per-tenant di dashboard Nuxt (grafik pemakaian harian, running total bulan berjalan, % quota terpakai). Threshold notif 80% / 95% / 100%. Notif web via Socket.io (banner di dashboard) + email via Resend.com. Tambah tabel `quota_alerts` untuk cegah double notif |
+| **Phase 14** | Invoice Generation + PDF + Email | 2–3 minggu | Cron job tanggal 1 setiap bulan. Hitung subtotal + overage + PPN 11%. Generate PDF via Puppeteer (render HTML template → PDF). Simpan ke storage (`/storage/invoices/`). Insert tabel `invoices` + `invoice_items`. Kirim email ke tenant dengan PDF attachment. Tenant bisa download PDF dari dashboard |
+| **Phase 15** | Payment Gateway (Midtrans) | 2–3 minggu | Integrasi Midtrans Snap API. Metode pembayaran: QRIS, Virtual Account (BCA/BNI/BRI/Mandiri), GoPay, OVO, Dana, ShopeePay. Halaman invoice di dashboard + tombol Bayar. Webhook handler `/api/payments/webhook` untuk konfirmasi otomatis. Update invoice → `paid`. Kirim email receipt setelah pembayaran berhasil |
+| **Phase 16** | Grace Period + Quota Enforcement | 1 minggu | Logic suspend chatbot saat quota 100% + 3 hari grace period. Cron harian cek `grace_period_end`. Chatbot status → `suspended` jika tidak bayar. Reaktivasi otomatis setelah webhook payment confirmed. Notif email final sebelum suspend |
+| **Phase 17** | Auth UMKM & Multi-portal | 2–3 minggu | Sistem login/register terpisah untuk UMKM. Self-register + verifikasi email. Google OAuth. Onboarding wizard 3 langkah. Dashboard UMKM ter-scope ke `client_id` masing-masing. Lihat detail di section [Auth UMKM](#auth-umkm--sistem-login--registrasi) |
+| **Phase 18** | Landing Page & Halaman Publik | 2–3 minggu | Halaman komersial untuk akuisisi UMKM baru. Landing page utama, halaman cara kerja, pricing, dan FAQ. Satu repo Nuxt.js dengan dashboard. Lihat detail di section [Landing Page](#landing-page--halaman-publik) |
+
+---
+
+## Pricing & Billing Model
+
+### Struktur Plan
+
+| Plan | Harga/bulan | Quota pesan | Overage | Behavior saat habis |
+|---|---|---|---|---|
+| **Free** | Rp 0 | 100 pesan | Tidak ada | Chatbot berhenti, grace period 3 hari |
+| **Basic** | Rp 99.000 | 1.000 pesan | Rp 150/pesan | Tetap jalan (overage ditagih), grace period 3 hari |
+| **Pro** | Rp 299.000 | 5.000 pesan | Rp 120/pesan | Tetap jalan (overage ditagih), grace period 3 hari |
+
+### Dasar Estimasi Harga Overage
+
+Rata-rata 1 pesan = ~800 input token + ~300 output token (termasuk system prompt + knowledge base injection).
+
+| Komponen | Harga Anthropic | Estimasi per pesan |
 |---|---|---|
-| Knowledge base kecil (< 50KB) | ✅ Cukup | ✅ Cukup |
-| Knowledge base besar (ratusan produk) | ❌ Token boros, lambat | ✅ Efisien |
-| Banyak UMKM sekaligus | ❌ Prompt membengkak | ✅ Hanya ambil yang relevan |
-| Akurasi jawaban | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| Input tokens (800) | $3 / 1M token | ~$0.0024 |
+| Output tokens (300) | $15 / 1M token | ~$0.0045 |
+| **Total biaya AI** | | **~$0.007 ≈ Rp 115** (kurs 16.500) |
+
+Overage Basic Rp 150/pesan → margin ~23% setelah biaya AI.
+Overage Pro Rp 120/pesan → margin ~4% (volume discount, acceptable).
+
+> **Catatan:** Harga overage harus di-review jika rata-rata panjang percakapan meningkat (knowledge base besar + history panjang = lebih banyak input token).
+
+### Grace Period
+
+- Saat quota 100% habis → chatbot masih jalan selama **3 hari**
+- Hari ke-4 tanpa pembayaran → chatbot di-**suspend** (status `grace_expired`)
+- Setelah pembayaran dikonfirmasi Midtrans → chatbot **reaktivasi otomatis**
+- Plan **Free** tidak ada overage — chatbot langsung berhenti saat 100%, grace period tetap 3 hari sebelum suspend permanen
+
+### Threshold Notifikasi Quota
+
+| Threshold | Aksi |
+|---|---|
+| 80% | Notif web (banner dashboard) + email: "Sisa 20% quota bulan ini" |
+| 95% | Notif urgent + saran upgrade plan |
+| 100% | Notif: chatbot masuk grace period, sisa 3 hari |
+| Grace hari ke-3 | Email peringatan final sebelum suspend |
+
+### Format Nomor Invoice
+
+```
+INV-[TAHUN]-[BULAN]-[SEQUENCE 5 DIGIT]
+Contoh: INV-2025-01-00042
+```
+
+Sequence tidak reset per tahun agar nomor invoice selalu unik dan mudah dilacak.
+
+### Struktur Invoice
+
+```
+INV-2025-01-00042 | Diterbitkan: 1 Februari 2025
+Kepada  : Toko Kue Laris Manis
+Email   : larismanis@gmail.com
+Periode : 1 Januari 2025 – 31 Januari 2025
+Plan    : Basic
+
+Langganan Basic (Jan 2025)          Rp  99.000
+Overage: 150 pesan × Rp 150        Rp  22.500
+                                   ──────────
+Subtotal                            Rp 121.500
+PPN 11%                             Rp  13.365
+                                   ──────────
+TOTAL                               Rp 134.865
+```
+
+### Payment Gateway — Midtrans
+
+Semua metode pembayaran ditangani Midtrans Snap (satu integrasi, semua metode):
+- QRIS (semua e-wallet & m-banking)
+- Virtual Account: BCA, BNI, BRI, Mandiri, Permata
+- E-wallet: GoPay, OVO, Dana, ShopeePay
+- Package: `midtrans-client` (Node.js SDK)
 
 ---
 
-### Arsitektur RAG dengan Pinecone
-
-```
-┌─────────────────────────────────────────────────────┐
-│                   KNOWLEDGE INPUT                    │
-│                                                      │
-│  Manual / Upload File / Crawl URL / Paste Teks       │
-│                      ↓                              │
-│              Chunker Service                         │
-│          (pecah jadi ~400 kata)                      │
-│                      ↓                              │
-│            Embedding Service                         │
-│         (Gemini text-embedding-004)                  │
-│                      ↓                              │
-│  ┌────────────┐    ┌──────────────────────────┐     │
-│  │ PostgreSQL │    │  Pinecone (Cloud Vector)  │     │
-│  │ (metadata) │    │  (vector embeddings)      │     │
-│  └────────────┘    └──────────────────────────┘     │
-└─────────────────────────────────────────────────────┘
-
-┌─────────────────────────────────────────────────────┐
-│                   CHAT FLOW (RAG)                    │
-│                                                      │
-│  User tanya: "harga kue berapa?"                     │
-│                      ↓                              │
-│         Embed pertanyaan (Gemini)                    │
-│                      ↓                              │
-│      Vector Search di Pinecone                       │
-│      (cari top 3 chunk paling mirip)                 │
-│                      ↓                              │
-│      Inject chunk relevan ke prompt                  │
-│                      ↓                              │
-│         AI jawab dengan akurat ✅                    │
-└─────────────────────────────────────────────────────┘
-```
-
----
-
-### Setup Pinecone
-
-#### 1. Daftar & Buat Index
-```
-1. Login ke app.pinecone.io
-2. Create Index:
-   - Name    : chatbot-hub
-   - Model   : text-embedding-004 (Google)
-   - Metric  : cosine
-   - Dimension: 768
-3. Copy API Key dari dashboard
-```
-
-#### 2. Environment Variables
-```env
-# .env
-PINECONE_API_KEY=your_pinecone_api_key
-PINECONE_INDEX=chatbot-hub
-GEMINI_API_KEY=your_gemini_api_key    # untuk generate embedding (gratis)
-```
-
-#### 3. Install Library
-```bash
-npm install @pinecone-database/pinecone @google/generative-ai
-npm install pdf-parse mammoth csv-parser cheerio
-npm install node-cron
-```
-
----
-
-### Perubahan Database PostgreSQL
-
-Tidak perlu pgvector! Hanya tambah kolom untuk tracking:
+## Database Model Tambahan — Billing
 
 ```sql
--- Tambah kolom di knowledge_bases (tracking status embedding)
-ALTER TABLE knowledge_bases
-ADD COLUMN is_embedded   BOOLEAN DEFAULT FALSE,
-ADD COLUMN embedded_at   TIMESTAMPTZ NULL,
-ADD COLUMN chunk_count   SMALLINT DEFAULT 0;
-
--- Tambah tabel untuk tracking sumber crawl
-CREATE TABLE knowledge_sources (
-  id            BIGSERIAL PRIMARY KEY,
-  client_id     BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  knowledge_id  BIGINT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
-  source_type   VARCHAR(20) CHECK (source_type IN ('manual', 'file', 'url', 'text')),
-  source_url    VARCHAR(500) NULL,        -- jika dari crawling
-  last_content  TEXT NULL,               -- untuk deteksi perubahan saat re-crawl
-  last_crawled_at TIMESTAMPTZ NULL,
-  created_at    TIMESTAMPTZ DEFAULT NOW()
+-- =============================================================
+-- 9. PLANS (master data paket berlangganan)
+-- =============================================================
+CREATE TABLE plans (
+  id                  SERIAL PRIMARY KEY,
+  name                VARCHAR(50) NOT NULL,               -- 'free', 'basic', 'pro'
+  price_idr           INT NOT NULL DEFAULT 0,             -- harga bulanan dalam Rupiah
+  quota_messages      INT NOT NULL,                       -- jumlah pesan per bulan
+  overage_price_idr   INT NOT NULL DEFAULT 0,             -- harga per pesan overage (Rupiah)
+  is_active           BOOLEAN DEFAULT TRUE
 );
+
+INSERT INTO plans (name, price_idr, quota_messages, overage_price_idr) VALUES
+('free',  0,       100,   0),
+('basic', 99000,   1000,  150),
+('pro',   299000,  5000,  120);
+
+-- Tambah kolom plan_id ke tabel clients (relasi ke plans)
+ALTER TABLE clients ADD COLUMN plan_id INT REFERENCES plans(id) DEFAULT 1;
+ALTER TABLE clients ADD COLUMN grace_period_end TIMESTAMPTZ NULL;
+ALTER TABLE clients ADD COLUMN chatbot_status VARCHAR(20) DEFAULT 'active'
+  CHECK (chatbot_status IN ('active', 'grace', 'suspended'));
+
+-- =============================================================
+-- 10. QUOTA ALERTS (track notifikasi yang sudah dikirim)
+-- =============================================================
+CREATE TABLE quota_alerts (
+  id            BIGSERIAL PRIMARY KEY,
+  client_id     BIGINT NOT NULL REFERENCES clients(id),
+  period        DATE NOT NULL,                            -- bulan-tahun periode (hari selalu 1)
+  threshold_pct SMALLINT NOT NULL,                        -- 80, 95, 100
+  notif_web_sent  BOOLEAN DEFAULT FALSE,
+  notif_email_sent BOOLEAN DEFAULT FALSE,
+  sent_at       TIMESTAMPTZ NULL,
+  UNIQUE (client_id, period, threshold_pct)
+);
+
+-- =============================================================
+-- 11. INVOICES (header invoice bulanan)
+-- =============================================================
+CREATE TABLE invoices (
+  id              BIGSERIAL PRIMARY KEY,
+  invoice_number  VARCHAR(30) UNIQUE NOT NULL,            -- INV-2025-01-00042
+  client_id       BIGINT NOT NULL REFERENCES clients(id),
+  plan_id         INT NOT NULL REFERENCES plans(id),
+  period_start    DATE NOT NULL,
+  period_end      DATE NOT NULL,
+  subtotal_idr    INT NOT NULL DEFAULT 0,
+  ppn_idr         INT NOT NULL DEFAULT 0,                 -- PPN 11%
+  total_idr       INT NOT NULL DEFAULT 0,
+  status          VARCHAR(20) DEFAULT 'unpaid'
+    CHECK (status IN ('unpaid', 'paid', 'overdue', 'void')),
+  pdf_path        VARCHAR(500) NULL,                      -- path file PDF di storage
+  due_date        DATE NOT NULL,                          -- biasanya H+7 dari tanggal terbit
+  paid_at         TIMESTAMPTZ NULL,
+  created_at      TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_invoices_client ON invoices(client_id, period_start DESC);
+CREATE INDEX idx_invoices_status ON invoices(status, due_date);
+
+-- =============================================================
+-- 12. INVOICE ITEMS (line item per invoice)
+-- =============================================================
+CREATE TABLE invoice_items (
+  id            BIGSERIAL PRIMARY KEY,
+  invoice_id    BIGINT NOT NULL REFERENCES invoices(id) ON DELETE CASCADE,
+  description   VARCHAR(255) NOT NULL,                    -- 'Langganan Basic', 'Overage 150 pesan'
+  quantity      INT NOT NULL DEFAULT 1,
+  unit_price_idr INT NOT NULL,
+  amount_idr    INT NOT NULL
+);
+
+-- =============================================================
+-- 13. PAYMENT TRANSACTIONS (record setiap attempt pembayaran)
+-- =============================================================
+CREATE TABLE payment_transactions (
+  id                  BIGSERIAL PRIMARY KEY,
+  invoice_id          BIGINT NOT NULL REFERENCES invoices(id),
+  midtrans_order_id   VARCHAR(100) UNIQUE NOT NULL,       -- order_id yang dikirim ke Midtrans
+  midtrans_txn_id     VARCHAR(100) NULL,                  -- transaction_id dari Midtrans
+  payment_method      VARCHAR(50) NULL,                   -- 'qris', 'bank_transfer', 'gopay', dll
+  bank                VARCHAR(20) NULL,                   -- 'bca', 'bni', dll (jika VA)
+  amount_idr          INT NOT NULL,
+  status              VARCHAR(20) DEFAULT 'pending'
+    CHECK (status IN ('pending', 'settlement', 'expire', 'cancel', 'deny')),
+  midtrans_response   JSONB NULL,                         -- raw response dari Midtrans webhook
+  paid_at             TIMESTAMPTZ NULL,
+  created_at          TIMESTAMPTZ DEFAULT NOW(),
+  updated_at          TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_payment_invoice ON payment_transactions(invoice_id);
+CREATE INDEX idx_payment_order ON payment_transactions(midtrans_order_id);
+
+-- =============================================================
+-- 14. EMAIL LOGS (audit trail semua email yang dikirim)
+-- =============================================================
+CREATE TABLE email_logs (
+  id          BIGSERIAL PRIMARY KEY,
+  client_id   BIGINT NOT NULL REFERENCES clients(id),
+  type        VARCHAR(50) NOT NULL,
+    -- 'quota_alert_80', 'quota_alert_95', 'quota_alert_100',
+    -- 'grace_warning', 'invoice_generated', 'payment_confirmed', 'chatbot_suspended'
+  subject     VARCHAR(255) NOT NULL,
+  recipient   VARCHAR(255) NOT NULL,
+  status      VARCHAR(20) DEFAULT 'sent'
+    CHECK (status IN ('sent', 'failed', 'bounced')),
+  sent_at     TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_email_logs_client ON email_logs(client_id, sent_at DESC);
+
+-- Trigger updated_at untuk payment_transactions
+CREATE TRIGGER trg_payment_updated
+  BEFORE UPDATE ON payment_transactions
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+```
+
+### Library Tambahan untuk Billing
+
+```
+Backend:
+├── puppeteer              — HTML template → PDF invoice
+├── node-cron              — Cron job (generate invoice, cek grace period, threshold notif)
+├── midtrans-client        — Midtrans Snap & webhook verification
+├── nodemailer             — SMTP email (atau gunakan Resend SDK)
+└── resend                 — Email service modern dengan free tier 3.000 email/bulan
+
+Storage invoice PDF:
+└── Local disk /storage/invoices/  (development)
+    atau MinIO / S3-compatible     (production)
+```
+
+### Endpoint API Tambahan — Billing
+
+```
+# Usage & Quota (tenant dashboard)
+GET    /api/clients/:id/usage                    # Usage bulan berjalan + history
+GET    /api/clients/:id/usage/summary            # % quota, sisa pesan, estimasi overage
+
+# Invoices
+GET    /api/clients/:id/invoices                 # List semua invoice
+GET    /api/clients/:id/invoices/:iid            # Detail invoice
+GET    /api/clients/:id/invoices/:iid/pdf        # Download PDF invoice
+POST   /api/clients/:id/invoices/:iid/pay        # Buat Midtrans payment link
+
+# Payment webhook (public, no auth — verifikasi via Midtrans signature)
+POST   /api/payments/webhook                     # Callback dari Midtrans
+
+# Admin only
+GET    /api/admin/invoices                       # List semua invoice semua tenant
+POST   /api/admin/invoices/generate              # Manual trigger generate invoice
+GET    /api/admin/revenue?from=&to=              # Revenue report
+```
+
+### Halaman Dashboard Tambahan (Nuxt.js)
+
+```
+/clients/:id/usage          → Grafik pemakaian harian, progress bar quota, alert threshold
+/clients/:id/invoices       → List invoice dengan status (unpaid/paid/overdue)
+/clients/:id/invoices/:id   → Detail invoice + tombol Download PDF + tombol Bayar
+/admin/revenue              → Revenue dashboard semua tenant (superadmin only)
 ```
 
 ---
 
-### Struktur Direktori Tambahan
+## Auth UMKM — Sistem Login & Registrasi
 
-```
-src/
-├── modules/
-│   └── knowledge/
-│       ├── knowledge.routes.ts       ← tambah endpoint import & crawl
-│       ├── knowledge.controller.ts   ← tambah handler baru
-│       ├── knowledge.repository.ts   ← tambah updateEmbedStatus()
-│       ├── chunker.service.ts        ← BARU: pecah teks jadi chunks
-│       ├── crawler.service.ts        ← BARU: crawl URL & parse file
-│       └── importer.service.ts       ← BARU: handle upload file
-│
-├── providers/
-│   └── ai/
-│       ├── ai.interface.ts           ← tidak berubah
-│       ├── claude.provider.ts        ← tidak berubah
-│       ├── groq.provider.ts          ← tidak berubah
-│       ├── embedding.service.ts      ← BARU: Gemini embedding
-│       └── pinecone.service.ts       ← BARU: vector store & search
-│
-└── jobs/
-    └── reindex.job.ts                ← BARU: auto re-crawl scheduler
-```
+### Dua Portal Terpisah
 
----
-
-### Core Logic RAG
-
-#### 1. Embedding Service (Gemini — Gratis)
-
-```typescript
-// src/providers/ai/embedding.service.ts
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-export class EmbeddingService {
-  private genAI: GoogleGenerativeAI;
-
-  constructor() {
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  }
-
-  async embed(text: string): Promise<number[]> {
-    const model = this.genAI.getGenerativeModel({
-      model: 'text-embedding-004',
-    });
-    const result = await model.embedContent(text);
-    return result.embedding.values; // 768 dimensi
-  }
-
-  async embedBatch(texts: string[]): Promise<number[][]> {
-    return Promise.all(texts.map(t => this.embed(t)));
-  }
-}
-```
-
----
-
-#### 2. Pinecone Service — Simpan & Cari Vector
-
-```typescript
-// src/providers/ai/pinecone.service.ts
-import { Pinecone } from '@pinecone-database/pinecone';
-
-export class PineconeService {
-  private client: Pinecone;
-  private indexName: string;
-
-  constructor() {
-    this.client = new Pinecone({
-      apiKey: process.env.PINECONE_API_KEY!,
-    });
-    this.indexName = process.env.PINECONE_INDEX!;
-  }
-
-  private get index() {
-    return this.client.index(this.indexName);
-  }
-
-  // Simpan chunks ke Pinecone
-  async upsertChunks(params: {
-    clientId: number;
-    knowledgeId: number;
-    chunks: { content: string; embedding: number[]; chunkIndex: number }[];
-  }) {
-    const vectors = params.chunks.map((chunk, i) => ({
-      id: `client_${params.clientId}_kb_${params.knowledgeId}_chunk_${chunk.chunkIndex}`,
-      values: chunk.embedding,
-      metadata: {
-        clientId: params.clientId,
-        knowledgeId: params.knowledgeId,
-        content: chunk.content,        // simpan konten di metadata
-        chunkIndex: chunk.chunkIndex,
-      },
-    }));
-
-    await this.index.upsert(vectors);
-  }
-
-  // Cari chunk paling relevan berdasarkan query
-  async search(params: {
-    clientId: number;
-    queryEmbedding: number[];
-    topK?: number;
-  }): Promise<{ content: string; score: number }[]> {
-    const result = await this.index.query({
-      vector: params.queryEmbedding,
-      topK: params.topK ?? 3,
-      filter: { clientId: params.clientId },  // isolasi per UMKM
-      includeMetadata: true,
-    });
-
-    return result.matches
-      .filter(m => (m.score ?? 0) > 0.7)     // threshold similarity
-      .map(m => ({
-        content: m.metadata?.content as string,
-        score: m.score ?? 0,
-      }));
-  }
-
-  // Hapus semua chunk milik 1 knowledge (saat update)
-  async deleteByKnowledge(clientId: number, knowledgeId: number) {
-    await this.index.deleteMany({
-      filter: { clientId, knowledgeId },
-    });
-  }
-}
-```
-
----
-
-#### 3. Chunker Service
-
-```typescript
-// src/modules/knowledge/chunker.service.ts
-
-export class ChunkerService {
-  chunk(text: string, chunkSize = 400, overlap = 50): string[] {
-    const words = text.split(/\s+/);
-    const chunks: string[] = [];
-
-    let i = 0;
-    while (i < words.length) {
-      const chunk = words.slice(i, i + chunkSize).join(' ');
-      chunks.push(chunk);
-      i += chunkSize - overlap;
-    }
-
-    return chunks.filter(c => c.trim().length > 50);
-  }
-}
-```
-
----
-
-#### 4. Update Chat Service — Minimal Change
-
-```typescript
-// src/modules/chat/chat.service.ts
-// Hanya bagian load knowledge yang berubah:
-
-// SEBELUMNYA (tanpa RAG):
-const knowledge = await knowledgeRepo.findActiveByClient(params.clientId);
-
-// SESUDAH RAG:
-const queryEmbedding = await embeddingService.embed(params.userMessage);
-const relevantChunks = await pineconeService.search({
-  clientId: params.clientId,
-  queryEmbedding,
-  topK: 3,
-});
-
-// Sisanya SAMA PERSIS ✅
-// buildSystemPrompt terima relevantChunks instead of all knowledge
-```
-
----
-
-#### 5. Flow Saat UMKM Simpan Knowledge Baru
-
-```typescript
-// src/modules/knowledge/knowledge.controller.ts
-
-async createKnowledge(clientId: number, data: CreateKnowledgeDto) {
-  // 1. Simpan ke PostgreSQL seperti biasa
-  const knowledge = await knowledgeRepo.create(clientId, data);
-
-  // 2. Chunking
-  const chunks = chunkerService.chunk(data.content);
-
-  // 3. Generate embedding (Gemini — gratis)
-  const embeddings = await embeddingService.embedBatch(chunks);
-
-  // 4. Simpan ke Pinecone
-  await pineconeService.upsertChunks({
-    clientId,
-    knowledgeId: knowledge.id,
-    chunks: chunks.map((content, i) => ({
-      content,
-      embedding: embeddings[i],
-      chunkIndex: i,
-    })),
-  });
-
-  // 5. Update status di PostgreSQL
-  await knowledgeRepo.updateEmbedStatus(knowledge.id, chunks.length);
-
-  return knowledge;
-}
-```
-
----
-
-### Cara Import Knowledge (Selain Manual)
-
-#### Upload File (PDF / DOCX / CSV)
-
-```typescript
-// src/modules/knowledge/importer.service.ts
-import pdfParse from 'pdf-parse';
-import mammoth from 'mammoth';
-
-export class ImporterService {
-  async fromPdf(buffer: Buffer): Promise<string> {
-    const data = await pdfParse(buffer);
-    return data.text;
-  }
-
-  async fromDocx(buffer: Buffer): Promise<string> {
-    const result = await mammoth.extractRawText({ buffer });
-    return result.value;
-  }
-}
-```
-
-#### Crawling URL Website UMKM
-
-```typescript
-// src/modules/knowledge/crawler.service.ts
-import * as cheerio from 'cheerio';
-
-export class CrawlerService {
-  async crawlUrl(url: string): Promise<string> {
-    const html = await fetch(url).then(r => r.text());
-    const $ = cheerio.load(html);
-
-    $('nav, footer, script, style, iframe, .ads').remove();
-
-    return $('main, article, .content, body')
-      .text()
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
-}
-```
-
-#### AI-Assisted dari Teks Mentah (Caption IG, dll)
-
-```typescript
-async structureRawText(rawText: string): Promise<string> {
-  const prompt = `
-    Strukturkan teks mentah ini menjadi knowledge base yang rapi:
-    "${rawText}"
-    Format: nama info, detail, harga jika ada, kontak jika ada.
-    Kembalikan hanya teks terstruktur tanpa penjelasan tambahan.
-  `;
-  const result = await aiProvider.chat({
-    messages: [{ role: 'user', content: prompt }],
-  });
-  return result.content;
-}
-```
-
----
-
-### Endpoint Baru (Fase 8)
-
-```
-POST   /api/clients/:id/knowledge/import/file     # Upload PDF/DOCX/CSV
-POST   /api/clients/:id/knowledge/import/url      # Crawl dari URL
-POST   /api/clients/:id/knowledge/import/text     # AI-assisted dari teks mentah
-POST   /api/clients/:id/knowledge/reindex         # Re-generate semua embedding
-GET    /api/clients/:id/knowledge/search?q=       # Test vector search (debug)
-```
-
----
-
-### Fase 8 di Terminal (Claude Code)
-
-```
-baca file planning.md section "RAG + Vector Search (Fase 8)", lalu implementasikan:
-1. Install library: @pinecone-database/pinecone @google/generative-ai pdf-parse mammoth cheerio node-cron
-2. Tambah migration: kolom is_embedded, embedded_at, chunk_count di knowledge_bases, dan tabel knowledge_sources
-3. Buat embedding.service.ts menggunakan Gemini text-embedding-004
-4. Buat pinecone.service.ts dengan fungsi upsertChunks, search, dan deleteByKnowledge
-5. Buat chunker.service.ts dengan chunk size 400 kata dan overlap 50 kata
-6. Buat crawler.service.ts menggunakan cheerio untuk crawl URL statis
-7. Buat importer.service.ts untuk handle upload PDF dan DOCX
-8. Update knowledge.controller.ts: saat create/update knowledge otomatis chunk + embed + upsert ke Pinecone
-9. Update chat.service.ts: ganti findActiveByClient dengan embed query + pineconeService.search
-10. Tambah endpoint import/file, import/url, import/text, dan reindex
-11. Buat unit test untuk chunker.service dan pinecone.service (dengan mock)
-```
-
-### Mengapa RAG?
-
-| Kondisi | Tanpa RAG | Dengan RAG |
+| Portal | URL | Untuk siapa |
 |---|---|---|
-| Knowledge base kecil (< 50KB) | ✅ Cukup | ✅ Cukup |
-| Knowledge base besar (ratusan produk) | ❌ Token boros, lambat | ✅ Efisien |
-| Banyak UMKM sekaligus | ❌ Prompt membengkak | ✅ Hanya ambil yang relevan |
-| Akurasi jawaban | ⭐⭐⭐ | ⭐⭐⭐⭐⭐ |
+| **Admin Hub** | `/admin/login` | Pengelola platform (superadmin, admin) |
+| **Dashboard UMKM** | `/login` atau `/app/login` | Pemilik & operator toko |
 
----
+Kedua portal menggunakan JWT, tapi token-nya berbeda dan tidak saling bisa dipakai. Middleware membedakan via `user_type: 'admin' | 'client'` di dalam JWT payload.
 
-### Perubahan Database
+### Cara Buat Akun UMKM
+
+**Jalur 1 — Self-register (UMKM daftar sendiri)**
+```
+1. Buka /register
+2. Isi: nama toko, nama pemilik, email, password (min 8 karakter)
+   — atau klik "Daftar dengan Google" → Google OAuth flow
+3. Sistem kirim email verifikasi (link berlaku 24 jam)
+4. Klik link → status akun: active, plan: free
+5. Redirect ke onboarding wizard
+```
+
+**Jalur 2 — Admin buatkan akun**
+```
+1. Admin login ke /admin
+2. Buka menu Clients → Tambah Client Baru
+3. Isi data toko + email UMKM
+4. Sistem generate password sementara + kirim email undangan
+5. UMKM klik link di email → set password baru → masuk dashboard
+```
+
+### Onboarding Wizard (setelah register berhasil)
+
+3 langkah yang memandu UMKM baru sebelum masuk dashboard utama:
+
+```
+Step 1 — Profil Toko
+  Nama toko, deskripsi singkat, nomor HP admin toko
+
+Step 2 — Setup Chatbot Dasar
+  Nama chatbot, bahasa, pesan sambutan
+  (bisa skip, bisa edit nanti)
+
+Step 3 — Connect WhatsApp
+  Tampilkan QR code untuk scan
+  (bisa skip, WhatsApp bisa dihubungkan nanti dari dashboard)
+```
+
+Setelah wizard selesai → masuk dashboard UMKM. Status onboarding disimpan di kolom `onboarding_completed_at`.
+
+### Fitur Auth Lengkap
+
+| Fitur | Keterangan |
+|---|---|
+| Register email + password | Wajib verifikasi email dulu |
+| Login Google OAuth | Passport.js strategy `google-oauth20` |
+| Lupa password | Kirim link reset ke email, berlaku 1 jam |
+| Ganti password | Dari halaman profil, perlu konfirmasi password lama |
+| Logout | Revoke refresh token di DB |
+| Remember me | Refresh token 30 hari (default 7 hari) |
+| Multiple user per toko | Owner bisa invite operator/viewer (fase lanjutan) |
+
+### Role dalam Satu Akun UMKM
+
+Kolom `role` di `client_users` — bisa dikembangkan di fase lanjutan:
+
+| Role | Akses |
+|---|---|
+| `owner` | Akses penuh: chatbot, WA, knowledge base, usage, invoice, billing |
+| `operator` | Manage chatbot, WA, knowledge base — tidak bisa lihat invoice & billing |
+| `viewer` | Read-only: hanya lihat conversation history & analytics |
+
+> Untuk Phase 17, implementasi dulu `owner` saja. Role `operator` dan `viewer` bisa ditambah di fase berikutnya.
+
+### Database Model — Auth UMKM
 
 ```sql
--- 1. Aktifkan extension pgvector
-CREATE EXTENSION IF NOT EXISTS vector;
-
--- 2. Tambah kolom embedding ke knowledge_bases
-ALTER TABLE knowledge_bases
-ADD COLUMN embedding vector(768) NULL;     -- 768 dimensi untuk Gemini embedding
-                                           -- ganti 1536 jika pakai OpenAI
-
--- 3. Tambah tabel chunks (pecahan knowledge untuk RAG)
-CREATE TABLE knowledge_chunks (
-  id            BIGSERIAL PRIMARY KEY,
-  knowledge_id  BIGINT NOT NULL REFERENCES knowledge_bases(id) ON DELETE CASCADE,
-  client_id     BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
-  chunk_index   SMALLINT NOT NULL,           -- urutan chunk dalam 1 knowledge
-  content       TEXT NOT NULL,               -- isi chunk (max ~500 kata)
-  embedding     vector(768) NOT NULL,        -- vector embedding chunk ini
-  created_at    TIMESTAMPTZ DEFAULT NOW()
+-- =============================================================
+-- 15. CLIENT USERS (akun login UMKM — terpisah dari admin_users)
+-- =============================================================
+CREATE TABLE client_users (
+  id                      BIGSERIAL PRIMARY KEY,
+  client_id               BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,
+  name                    VARCHAR(255) NOT NULL,
+  email                   VARCHAR(255) UNIQUE NOT NULL,
+  password_hash           VARCHAR(255) NULL,              -- NULL jika login via Google OAuth
+  google_id               VARCHAR(100) UNIQUE NULL,       -- Google OAuth subject ID
+  google_avatar_url       VARCHAR(500) NULL,
+  role                    VARCHAR(20) DEFAULT 'owner'
+    CHECK (role IN ('owner', 'operator', 'viewer')),
+  status                  VARCHAR(20) DEFAULT 'pending'
+    CHECK (status IN ('pending', 'active', 'suspended')),
+  email_verified_at       TIMESTAMPTZ NULL,
+  onboarding_completed_at TIMESTAMPTZ NULL,
+  last_login_at           TIMESTAMPTZ NULL,
+  created_at              TIMESTAMPTZ DEFAULT NOW(),
+  updated_at              TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 4. Index untuk vector search (cosine similarity)
-CREATE INDEX idx_chunks_embedding ON knowledge_chunks
-  USING ivfflat (embedding vector_cosine_ops)
-  WITH (lists = 100);
+CREATE INDEX idx_client_users_email  ON client_users(email);
+CREATE INDEX idx_client_users_client ON client_users(client_id);
 
-CREATE INDEX idx_chunks_client ON knowledge_chunks(client_id);
+-- =============================================================
+-- 16. EMAIL VERIFICATIONS (token verifikasi email & reset password)
+-- =============================================================
+CREATE TABLE email_verifications (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT NOT NULL REFERENCES client_users(id) ON DELETE CASCADE,
+  type        VARCHAR(20) NOT NULL
+    CHECK (type IN ('verify_email', 'reset_password', 'invite')),
+  token_hash  VARCHAR(255) UNIQUE NOT NULL,           -- hash dari token yang dikirim ke email
+  expires_at  TIMESTAMPTZ NOT NULL,
+  used_at     TIMESTAMPTZ NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_email_verif_token ON email_verifications(token_hash);
+
+-- =============================================================
+-- 17. REFRESH TOKENS (untuk kedua jenis user: UMKM + admin)
+-- =============================================================
+CREATE TABLE refresh_tokens (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT NOT NULL,
+  user_type   VARCHAR(10) NOT NULL CHECK (user_type IN ('client', 'admin')),
+  token_hash  VARCHAR(255) UNIQUE NOT NULL,
+  expires_at  TIMESTAMPTZ NOT NULL,
+  revoked_at  TIMESTAMPTZ NULL,
+  created_at  TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE INDEX idx_refresh_tokens_user ON refresh_tokens(user_id, user_type);
+
+-- Trigger updated_at untuk client_users
+CREATE TRIGGER trg_client_users_updated
+  BEFORE UPDATE ON client_users
+  FOR EACH ROW EXECUTE FUNCTION set_updated_at();
+```
+
+### Endpoint API Tambahan — Auth UMKM
+
+```
+# Auth UMKM (public)
+POST   /api/auth/register                  # Daftar akun baru (email + password)
+POST   /api/auth/login                     # Login email + password
+POST   /api/auth/logout                    # Revoke refresh token
+POST   /api/auth/refresh                   # Refresh access token
+GET    /api/auth/google                    # Redirect ke Google OAuth
+GET    /api/auth/google/callback           # Callback dari Google
+POST   /api/auth/verify-email              # Verifikasi token dari email
+POST   /api/auth/forgot-password           # Request reset password
+POST   /api/auth/reset-password            # Submit password baru dengan token
+
+# Profil UMKM (auth: Bearer JWT client)
+GET    /api/me                             # Data user yang sedang login
+PUT    /api/me                             # Update nama, avatar
+PUT    /api/me/password                    # Ganti password
+
+# Onboarding
+GET    /api/me/onboarding                  # Status onboarding
+PUT    /api/me/onboarding                  # Update progress wizard
+```
+
+### Halaman Nuxt.js Tambahan — Auth & Onboarding
+
+```
+/register                 → Form registrasi UMKM baru
+/login                    → Login UMKM (email/password + Google OAuth)
+/verify-email             → Halaman konfirmasi setelah klik link email
+/forgot-password          → Form request reset password
+/reset-password           → Form input password baru
+/onboarding               → Wizard 3 langkah (profil → chatbot → WA)
+/app/profile              → Halaman profil & ganti password
+/admin/login              → Login khusus admin hub (terpisah)
+```
+
+### Library Tambahan untuk Auth
+
+```
+Backend:
+├── passport                — Auth middleware (strategy pattern)
+├── passport-local          — Email + password strategy
+├── passport-google-oauth20 — Google OAuth strategy
+└── crypto (built-in Node)  — Generate & hash token verifikasi email
 ```
 
 ---
 
-### Library Baru yang Dibutuhkan
+## Landing Page & Halaman Publik
+
+### Struktur Repo Nuxt.js (satu repo, tiga area)
 
 ```
-pgvector          — PostgreSQL vector extension client untuk Node.js
-@google/generative-ai — Gemini embedding (gratis)
-cheerio           — crawling website statis
-playwright        — crawling website dinamis (JS-heavy)
-pdf-parse         — parse PDF
-mammoth           — parse DOCX
-csv-parser        — parse CSV
-node-cron         — jadwal auto re-crawl
+Satu repo Nuxt.js menangani tiga area berbeda via route groups:
+
+/                          → Halaman publik (landing, pricing, cara kerja, FAQ)
+/login, /register          → Auth UMKM
+/app/...                   → Dashboard UMKM (protected, perlu login)
+/admin/...                 → Dashboard admin hub (protected, role admin)
+```
+
+Middleware Nuxt membedakan akses:
+- Route `/app/*` → cek JWT client, redirect ke `/login` jika belum login
+- Route `/admin/*` → cek JWT admin, redirect ke `/admin/login` jika belum login
+- Route publik `/`, `/pricing`, dst → bebas akses
+
+---
+
+### Daftar Halaman Publik
+
+#### 1. Landing Page Utama — `/`
+
+Halaman utama yang menjadi wajah produk. Tujuan utama: UMKM paham nilai produk dalam 10 detik dan tertarik klik "Coba Gratis".
+
+**Struktur section (dari atas ke bawah):**
+
+```
+┌─────────────────────────────────────────────┐
+│  NAVBAR                                     │
+│  Logo | Fitur | Cara Kerja | Harga | FAQ    │
+│  [Masuk]  [Coba Gratis →]                   │
+├─────────────────────────────────────────────┤
+│  HERO                                       │
+│  Headline: "Chatbot AI untuk Toko Anda,     │
+│  Siap dalam 5 Menit"                        │
+│  Subheadline: Otomatis balas pesan WA &     │
+│  website 24 jam tanpa biaya karyawan        │
+│  [Mulai Gratis] [Lihat Demo →]              │
+│  Visual: mockup chat WA + web widget        │
+├─────────────────────────────────────────────┤
+│  SOCIAL PROOF                               │
+│  "Dipercaya X+ UMKM di Indonesia"           │
+│  Logo / nama toko yang sudah pakai          │
+├─────────────────────────────────────────────┤
+│  MASALAH → SOLUSI                           │
+│  3 pain point UMKM + solusi platform ini    │
+│  ① Kewalahan balas WA → Chatbot 24/7       │
+│  ② Susah kelola CS → Semua terpusat        │
+│  ③ Biaya mahal → Mulai gratis              │
+├─────────────────────────────────────────────┤
+│  FITUR UNGGULAN (6 kartu)                   │
+│  WhatsApp otomatis | Web widget             │
+│  Knowledge base | Humanis & natural         │
+│  Multi-channel | Analitik percakapan        │
+├─────────────────────────────────────────────┤
+│  CARA KERJA (ringkasan 3 langkah)           │
+│  Daftar → Setup chatbot → Chatbot aktif     │
+│  [Lihat detail cara kerja →]                │
+├─────────────────────────────────────────────┤
+│  PRICING RINGKAS (3 kolom)                  │
+│  Free | Basic Rp 99rb | Pro Rp 299rb        │
+│  [Lihat perbandingan lengkap →]             │
+├─────────────────────────────────────────────┤
+│  TESTIMONI                                  │
+│  2–3 kutipan dari UMKM yang sudah pakai     │
+├─────────────────────────────────────────────┤
+│  CTA FINAL                                  │
+│  "Mulai sekarang, gratis selamanya"         │
+│  [Buat Akun Gratis]                         │
+├─────────────────────────────────────────────┤
+│  FOOTER                                     │
+│  Link halaman | Kontak | Syarat & Kebijakan │
+└─────────────────────────────────────────────┘
+```
+
+**Copywriting arah pesan:**
+- Bahasa Indonesia kasual, hangat, tidak korporat
+- Fokus pada manfaat nyata untuk UMKM: hemat waktu, hemat biaya, tidak perlu teknis
+- Hindari jargon AI/tech yang membingungkan pemilik toko
+
+---
+
+#### 2. Halaman Cara Kerja — `/cara-kerja`
+
+Penjelasan visual step-by-step bagaimana platform bekerja. Target: UMKM yang penasaran tapi belum yakin.
+
+**Struktur section:**
+
+```
+┌─────────────────────────────────────────────┐
+│  HERO MINI                                  │
+│  "Dari daftar sampai chatbot aktif,         │
+│   hanya butuh 5 menit"                      │
+├─────────────────────────────────────────────┤
+│  FLOW ONBOARDING (timeline vertikal)        │
+│                                             │
+│  Step 1 — Daftar akun (30 detik)            │
+│    Masukkan nama toko & email               │
+│    Langsung dapat akun gratis               │
+│                                             │
+│  Step 2 — Setup chatbot (2 menit)           │
+│    Beri nama chatbot & tulis persona-nya    │
+│    Isi info produk, FAQ, jam buka           │
+│                                             │
+│  Step 3 — Hubungkan WhatsApp (1 menit)      │
+│    Scan QR code sekali saja                 │
+│    Chatbot langsung aktif di nomor WA Anda  │
+│                                             │
+│  Step 4 — Pasang di website (opsional)      │
+│    Copy-paste 1 baris kode ke website       │
+│    Muncul chat bubble otomatis              │
+│                                             │
+│  Step 5 — Pantau dari dashboard             │
+│    Lihat semua percakapan                   │
+│    Monitor usage & performa chatbot         │
+├─────────────────────────────────────────────┤
+│  FLOW PERCAKAPAN (diagram visual)           │
+│  Pelanggan chat WA →                        │
+│  AI baca knowledge base toko →             │
+│  Balas otomatis dalam hitungan detik        │
+├─────────────────────────────────────────────┤
+│  DEMO INTERAKTIF (opsional, fase lanjutan)  │
+│  Widget chat langsung di halaman ini        │
+│  Bisa dicoba tanpa daftar                   │
+├─────────────────────────────────────────────┤
+│  CTA                                        │
+│  [Coba Sekarang — Gratis]                   │
+└─────────────────────────────────────────────┘
 ```
 
 ---
 
-### Struktur Direktori Tambahan
+#### 3. Halaman Pricing — `/harga`
+
+Perbandingan plan lengkap dengan semua fitur. Target: UMKM yang sudah tertarik, tinggal memilih plan.
+
+**Struktur section:**
 
 ```
-src/
-├── modules/
-│   └── knowledge/
-│       ├── knowledge.routes.ts       ← tambah endpoint import & crawl
-│       ├── knowledge.controller.ts   ← tambah handler baru
-│       ├── knowledge.repository.ts   ← tambah findRelevantChunks()
-│       ├── chunker.service.ts        ← BARU: pecah teks jadi chunks
-│       ├── crawler.service.ts        ← BARU: crawl URL & parse file
-│       └── importer.service.ts       ← BARU: handle upload file
+┌─────────────────────────────────────────────┐
+│  HEADLINE                                   │
+│  "Mulai gratis, upgrade kapan saja"         │
+│  Toggle: Bayar Bulanan (aktif)              │
+├─────────────────────────────────────────────┤
+│  3 KARTU PLAN                               │
+│                                             │
+│  FREE          BASIC ★        PRO           │
+│  Rp 0          Rp 99.000      Rp 299.000    │
+│  100 pesan/bln 1.000 pesan    5.000 pesan   │
+│                +Rp150/overage +Rp120/overage│
+│  [Mulai Gratis][Pilih Basic]  [Pilih Pro]   │
+├─────────────────────────────────────────────┤
+│  TABEL PERBANDINGAN FITUR LENGKAP           │
+│  Checklist semua fitur per plan             │
+│  (WhatsApp, web widget, knowledge base,     │
+│   jumlah pesan, support, dll)               │
+├─────────────────────────────────────────────┤
+│  KALKULATOR ESTIMASI BIAYA                  │
+│  "Kira-kira toko saya butuh plan apa?"      │
+│  Input: rata-rata pesan per hari →          │
+│  Output: rekomendasi plan + estimasi biaya  │
+├─────────────────────────────────────────────┤
+│  FAQ PRICING                                │
+│  - Apakah bisa upgrade/downgrade kapan saja?│
+│  - Bagaimana perhitungan overage?           │
+│  - Metode pembayaran apa saja?              │
+│  - Apakah ada kontrak jangka panjang?       │
+├─────────────────────────────────────────────┤
+│  CTA                                        │
+│  [Mulai dengan Free] [Hubungi Kami]         │
+└─────────────────────────────────────────────┘
+```
+
+**Tabel perbandingan fitur lengkap:**
+
+| Fitur | Free | Basic | Pro |
+|---|---|---|---|
+| Pesan per bulan | 100 | 1.000 | 5.000 |
+| Overage | — | Rp 150/pesan | Rp 120/pesan |
+| Chatbot WhatsApp | ✓ | ✓ | ✓ |
+| Web widget embed | ✓ | ✓ | ✓ |
+| Knowledge base | 3 entri | 20 entri | Unlimited |
+| History percakapan | 7 hari | 30 hari | 90 hari |
+| Analitik usage | Basic | Lengkap | Lengkap + export |
+| Email notifikasi | ✓ | ✓ | ✓ |
+| Invoice & billing | — | ✓ | ✓ |
+| Support | Email | Email + WA | Priority |
+| Grace period | 3 hari | 3 hari | 3 hari |
+
+> Batas knowledge base (3/20/unlimited) perlu dikonfirmasi dan ditambahkan ke skema `plans` sebagai kolom `max_knowledge_entries`.
+
+---
+
+#### 4. Halaman FAQ — `/faq`
+
+Pertanyaan umum yang muncul sebelum UMKM memutuskan daftar.
+
+**Kategori & pertanyaan:**
+
+```
+UMUM
+- Apa itu [Nama Produk]?
+- Apakah perlu keahlian teknis untuk pakai ini?
+- Apakah chatbot bisa berbahasa Indonesia?
+- Apakah data percakapan pelanggan saya aman?
+
+WHATSAPP
+- Apakah menggunakan WhatsApp resmi atau unofficial?
+- Apakah nomor WA saya bisa di-banned?
+- Bagaimana jika WA terputus?
+- Bisakah satu nomor WA untuk beberapa chatbot?
+
+CHATBOT & AI
+- Seberapa pintar chatbot-nya?
+- Apakah bisa menjawab pertanyaan di luar knowledge base?
+- Bagaimana cara update info produk di chatbot?
+- Apakah chatbot bisa ambil alih ke manusia (human takeover)?
+
+BILLING & PEMBAYARAN
+- Bagaimana cara hitung overage?
+- Metode pembayaran apa saja?
+- Apakah ada refund jika batal di tengah bulan?
+- Apakah ada kontrak atau bisa berhenti kapan saja?
+
+TEKNIS
+- Apakah bisa dipakai di website selain WordPress?
+- Apakah ada API untuk integrasi sistem saya?
+- Berapa lama waktu setup sampai chatbot aktif?
+```
+
+---
+
+### Struktur Route Nuxt.js — Halaman Publik
+
+```
+pages/
+├── index.vue                  → Landing page utama (/)
+├── cara-kerja.vue             → Halaman cara kerja (/cara-kerja)
+├── harga.vue                  → Halaman pricing (/harga)
+├── faq.vue                    → Halaman FAQ (/faq)
+├── login.vue                  → Login UMKM (/login)
+├── register.vue               → Register UMKM (/register)
+├── verify-email.vue           → Verifikasi email (/verify-email)
+├── forgot-password.vue        → Lupa password
+├── reset-password.vue         → Reset password
 │
-├── providers/
-│   └── ai/
-│       ├── ai.interface.ts           ← tidak berubah
-│       ├── claude.provider.ts        ← tidak berubah
-│       ├── groq.provider.ts          ← tidak berubah
-│       └── embedding.service.ts      ← BARU: generate & manage embedding
+├── onboarding/
+│   └── index.vue              → Wizard onboarding (/onboarding)
+│
+├── app/                       → Dashboard UMKM (protected)
+│   ├── index.vue              → Overview (/app)
+│   ├── chatbot.vue            → Config chatbot
+│   ├── knowledge.vue          → Knowledge base
+│   ├── whatsapp.vue           → Connect WA
+│   ├── conversations.vue      → Riwayat chat
+│   ├── usage.vue              → Usage & quota
+│   ├── invoices/
+│   │   ├── index.vue          → List invoice
+│   │   └── [id].vue           → Detail invoice
+│   └── profile.vue            → Profil akun
+│
+└── admin/                     → Dashboard admin hub (protected)
+    ├── login.vue              → Login admin
+    ├── index.vue              → Overview semua tenant
+    ├── clients/
+    │   ├── index.vue          → List semua UMKM
+    │   ├── new.vue            → Tambah UMKM baru
+    │   └── [id]/
+    │       ├── index.vue      → Detail UMKM
+    │       ├── chatbot.vue
+    │       ├── knowledge.vue
+    │       ├── whatsapp.vue
+    │       ├── conversations.vue
+    │       ├── usage.vue
+    │       └── invoices.vue
+    └── revenue.vue            → Revenue report
 ```
 
 ---
 
-### Core Logic RAG
+### Komponen Reusable untuk Halaman Publik
 
-#### 1. Chunker Service — Pecah Teks Jadi Potongan Kecil
+```
+components/public/
+├── PublicNavbar.vue           → Navbar dengan link + CTA button
+├── PublicFooter.vue           → Footer dengan link & kontak
+├── HeroSection.vue            → Hero utama dengan headline & CTA
+├── FeatureCard.vue            → Kartu fitur (icon + judul + deskripsi)
+├── PricingCard.vue            → Kartu plan (Free/Basic/Pro)
+├── PricingTable.vue           → Tabel perbandingan fitur lengkap
+├── PricingCalculator.vue      → Kalkulator estimasi biaya interaktif
+├── HowItWorkStep.vue          → Step di halaman cara kerja
+├── FaqAccordion.vue           → Accordion untuk FAQ
+├── TestimonialCard.vue        → Kartu testimoni UMKM
+└── ChatDemoWidget.vue         → Demo widget chat interaktif (opsional)
+```
+
+---
+
+### SEO & Meta — Halaman Publik
+
+Setiap halaman publik perlu `useHead()` di Nuxt dengan:
 
 ```typescript
-// src/modules/knowledge/chunker.service.ts
-
-export class ChunkerService {
-  // Pecah teks panjang jadi chunks ~400 kata dengan overlap 50 kata
-  chunk(text: string, chunkSize = 400, overlap = 50): string[] {
-    const words = text.split(/\s+/);
-    const chunks: string[] = [];
-
-    let i = 0;
-    while (i < words.length) {
-      const chunk = words.slice(i, i + chunkSize).join(' ');
-      chunks.push(chunk);
-      i += chunkSize - overlap; // overlap agar konteks tidak putus
-    }
-
-    return chunks.filter(c => c.trim().length > 50); // buang chunk terlalu pendek
-  }
-}
+// Contoh untuk landing page
+useHead({
+  title: '[Nama Produk] — Chatbot AI untuk UMKM Indonesia',
+  meta: [
+    { name: 'description', content: 'Otomatis balas pesan WhatsApp dan website 24 jam. Setup 5 menit, mulai gratis.' },
+    { property: 'og:title', content: '...' },
+    { property: 'og:description', content: '...' },
+    { property: 'og:image', content: '/og-image.png' },  // 1200x630px
+    { name: 'twitter:card', content: 'summary_large_image' },
+  ]
+})
 ```
 
-**Kenapa perlu chunking?**
-```
-Knowledge panjang (1000 kata)
-         ↓
-Chunk 1: kata 1-400     → embedding #1
-Chunk 2: kata 350-750   → embedding #2  (overlap 50 kata)
-Chunk 3: kata 700-1000  → embedding #3
-
-User tanya → cari chunk paling relevan → inject hanya itu ke prompt
-```
+Target keyword per halaman:
+- `/` → "chatbot WhatsApp UMKM", "chatbot otomatis toko online"
+- `/cara-kerja` → "cara buat chatbot WhatsApp", "chatbot AI toko"
+- `/harga` → "harga chatbot WhatsApp", "chatbot murah untuk UMKM"
+- `/faq` → long-tail questions dari UMKM
 
 ---
 
-#### 2. Embedding Service — Generate Vector dari Teks
+### Catatan Desain & UX
 
-```typescript
-// src/providers/ai/embedding.service.ts
-
-import { GoogleGenerativeAI } from '@google/generative-ai';
-
-export class EmbeddingService {
-  private genAI: GoogleGenerativeAI;
-
-  constructor() {
-    this.genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY!);
-  }
-
-  // Generate embedding untuk satu teks
-  async embed(text: string): Promise<number[]> {
-    const model = this.genAI.getGenerativeModel({
-      model: 'text-embedding-004',
-    });
-
-    const result = await model.embedContent(text);
-    return result.embedding.values;
-  }
-
-  // Generate embedding untuk banyak teks sekaligus (batch)
-  async embedBatch(texts: string[]): Promise<number[][]> {
-    const results = await Promise.all(
-      texts.map(text => this.embed(text))
-    );
-    return results;
-  }
-}
-```
+- **Brand name belum ditentukan** — semua copy menggunakan placeholder `[Nama Produk]`. Ganti setelah nama diputuskan.
+- **Warna & identitas visual** — belum ditentukan. Disarankan pakai warna yang relate ke WhatsApp (hijau) atau nuansa modern & terpercaya.
+- **Bahasa** — Indonesia kasual. Hindari kata "solusi", "inovatif", "terdepan". Pakai kata yang spesifik dan konkret.
+- **Mobile-first** — mayoritas UMKM akses dari HP. Semua halaman harus responsif sempurna di layar 375px ke atas.
+- **Page speed** — Nuxt SSG (static generation) untuk halaman publik agar load cepat dan SEO optimal. Dashboard tetap SSR/SPA.
+- **Demo widget** — pertimbangkan tambahkan chatbot demo live di halaman `/cara-kerja` yang bisa dicoba tanpa daftar, menggunakan tenant demo "Toko Kue Laris Manis" dari seed data.
 
 ---
 
-#### 3. Knowledge Repository — Vector Search
-
-```typescript
-// src/modules/knowledge/knowledge.repository.ts
-
-// Fungsi BARU: cari chunk paling relevan berdasarkan pertanyaan user
-async findRelevantChunks(
-  clientId: number,
-  queryEmbedding: number[],
-  topK = 3
-): Promise<KnowledgeChunk[]> {
-
-  // Cosine similarity search via pgvector
-  const result = await db.query(`
-    SELECT
-      kc.content,
-      kc.chunk_index,
-      kb.title,
-      1 - (kc.embedding <=> $1::vector) AS similarity
-    FROM knowledge_chunks kc
-    JOIN knowledge_bases kb ON kb.id = kc.knowledge_id
-    WHERE kc.client_id = $2
-      AND 1 - (kc.embedding <=> $1::vector) > 0.7  -- threshold similarity
-    ORDER BY kc.embedding <=> $1::vector            -- order by closest
-    LIMIT $3
-  `, [JSON.stringify(queryEmbedding), clientId, topK]);
-
-  return result.rows;
-}
-```
-
----
-
-#### 4. Chat Service — Update untuk RAG
-
-```typescript
-// src/modules/chat/chat.service.ts
-// Perubahan MINIMAL — hanya bagian load knowledge
-
-// SEBELUMNYA (tanpa RAG):
-const knowledge = await knowledgeRepo.findActiveByClient(params.clientId);
-
-// SETELAH RAG:
-const queryEmbedding = await embeddingService.embed(params.userMessage);
-const knowledge = await knowledgeRepo.findRelevantChunks(
-  params.clientId,
-  queryEmbedding,
-  3  // ambil top 3 chunk paling relevan
-);
-
-// Sisanya SAMA PERSIS — tidak ada perubahan lain ✅
-```
-
----
-
-#### 5. Flow Saat UMKM Input/Update Knowledge
-
-```typescript
-// src/modules/knowledge/knowledge.controller.ts
-// Saat UMKM simpan knowledge baru:
-
-async createKnowledge(clientId: number, data: CreateKnowledgeDto) {
-  // 1. Simpan knowledge ke DB seperti biasa
-  const knowledge = await knowledgeRepo.create(clientId, data);
-
-  // 2. Pecah konten jadi chunks
-  const chunks = chunkerService.chunk(data.content);
-
-  // 3. Generate embedding untuk semua chunks (batch)
-  const embeddings = await embeddingService.embedBatch(chunks);
-
-  // 4. Simpan chunks + embedding ke DB
-  await knowledgeRepo.saveChunks(
-    knowledge.id,
-    clientId,
-    chunks.map((content, i) => ({
-      content,
-      chunkIndex: i,
-      embedding: embeddings[i],
-    }))
-  );
-
-  return knowledge;
-}
-```
-
----
-
-### Cara Import Knowledge (Selain Manual)
-
-#### Upload File (PDF / DOCX / CSV)
-
-```typescript
-// src/modules/knowledge/importer.service.ts
-
-import pdfParse from 'pdf-parse';
-import mammoth from 'mammoth';
-import csv from 'csv-parser';
-
-export class ImporterService {
-  async fromPdf(buffer: Buffer): Promise<string> {
-    const data = await pdfParse(buffer);
-    return data.text;
-  }
-
-  async fromDocx(buffer: Buffer): Promise<string> {
-    const result = await mammoth.extractRawText({ buffer });
-    return result.value;
-  }
-
-  async fromCsv(buffer: Buffer): Promise<string> {
-    // Ubah CSV jadi teks terstruktur untuk knowledge base
-    return new Promise((resolve) => {
-      const rows: string[] = [];
-      // parse CSV → format jadi Q&A atau daftar produk
-      resolve(rows.join('\n'));
-    });
-  }
-}
-```
-
-#### Crawling URL Website UMKM
-
-```typescript
-// src/modules/knowledge/crawler.service.ts
-
-import * as cheerio from 'cheerio';
-
-export class CrawlerService {
-  async crawlUrl(url: string): Promise<string> {
-    const html = await fetch(url).then(r => r.text());
-    const $ = cheerio.load(html);
-
-    // Hapus elemen tidak relevan
-    $('nav, footer, script, style, iframe, .ads').remove();
-
-    // Ambil konten utama
-    const content = $('main, article, .content, body')
-      .text()
-      .replace(/\s+/g, ' ')
-      .trim();
-
-    return content;
-  }
-
-  // Crawl banyak halaman sekaligus
-  async crawlMultiple(urls: string[]): Promise<string> {
-    const contents = await Promise.all(
-      urls.map(url => this.crawlUrl(url))
-    );
-    return contents.join('\n\n');
-  }
-}
-```
-
-#### AI-Assisted Input (Paste dari IG/Caption)
-
-```typescript
-// UMKM paste teks acak dari caption Instagram/sosmed
-// AI strukturkan jadi knowledge base yang rapi
-
-async structureRawText(rawText: string, clientId: number): Promise<string> {
-  const prompt = `
-    Berikut adalah teks mentah dari informasi toko UMKM:
-    "${rawText}"
-
-    Strukturkan menjadi knowledge base yang rapi dalam format:
-    - Nama/Jenis informasi
-    - Detail lengkap
-    - Harga jika ada
-    - Kontak jika ada
-
-    Hanya kembalikan teks terstruktur, tanpa penjelasan tambahan.
-  `;
-
-  const result = await aiProvider.chat({
-    model: 'llama-3.3-70b-versatile',
-    messages: [{ role: 'user', content: prompt }],
-  });
-
-  return result.content;
-}
-```
-
----
-
-### Endpoint Baru (Fase 8)
-
-```
-# Knowledge Base — tambahan untuk RAG
-POST   /api/clients/:id/knowledge/import/file     # Upload PDF/DOCX/CSV
-POST   /api/clients/:id/knowledge/import/url      # Crawl dari URL
-POST   /api/clients/:id/knowledge/import/text     # AI-assisted dari teks mentah
-POST   /api/clients/:id/knowledge/reindex         # Re-generate semua embedding
-GET    /api/clients/:id/knowledge/search?q=       # Test vector search (debug)
-```
-
----
-
-### Auto Re-index Scheduler
-
-```typescript
-// src/jobs/reindex.job.ts
-import cron from 'node-cron';
-
-// Jalankan setiap hari jam 02.00 dini hari
-// Re-crawl URL yang terdaftar & update embedding jika konten berubah
-cron.schedule('0 2 * * *', async () => {
-  const clients = await clientRepo.findAllActive();
-
-  for (const client of clients) {
-    const crawlSources = await knowledgeRepo.findCrawlSources(client.id);
-
-    for (const source of crawlSources) {
-      const newContent = await crawlerService.crawlUrl(source.url);
-
-      if (newContent !== source.lastContent) {
-        // Konten berubah → update knowledge + re-generate embedding
-        await knowledgeService.updateAndReindex(source.id, newContent);
-      }
-    }
-  }
-});
-```
-
----
-
-### Perbandingan Sebelum & Sesudah RAG
-
-```
-SEBELUM RAG:
-User: "harga kue berapa?"
-→ Inject SEMUA knowledge (500+ baris) ke prompt
-→ Token besar, mahal, lambat
-
-SESUDAH RAG:
-User: "harga kue berapa?"
-→ Embed pertanyaan → vector search
-→ Ambil TOP 3 chunk paling relevan saja
-→ "Kue 18cm Rp185rb, 22cm Rp285rb, 26cm Rp385rb"
-→ Token hemat 90%, lebih cepat, lebih akurat ✅
-```
-
----
-
-### Fase 8 di Terminal (Claude Code)
-
-```
-baca file planning.md, lalu kerjakan fase 8 RAG + Vector Search:
-1. Install pgvector extension di PostgreSQL
-2. Jalankan migration: tambah kolom embedding di knowledge_bases dan buat tabel knowledge_chunks dengan index ivfflat
-3. Buat embedding.service.ts menggunakan Gemini text-embedding-004 (gratis)
-4. Buat chunker.service.ts dengan chunk size 400 kata dan overlap 50 kata
-5. Buat crawler.service.ts menggunakan cheerio untuk crawl URL
-6. Buat importer.service.ts untuk handle upload PDF, DOCX, dan CSV
-7. Update knowledge.repository.ts: tambah fungsi saveChunks dan findRelevantChunks dengan cosine similarity
-8. Update knowledge.controller.ts: saat create/update knowledge otomatis generate chunks dan embedding
-9. Update chat.service.ts: ganti findActiveByClient dengan findRelevantChunks via embedding
-10. Tambah endpoint POST /import/file, /import/url, /import/text, dan /reindex
-11. Buat unit test untuk chunker.service dan embedding.service
-```
 
 
+## Catatan Penting
 
 ### AI Provider
 - Untuk **development & testing** → gunakan **Groq** (gratis, daftar di console.groq.com)

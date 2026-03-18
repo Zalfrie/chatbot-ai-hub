@@ -22,12 +22,20 @@ const chatController = new ChatController(chatService);
 
 const rateLimit = rateLimitMiddleware();
 
-// POST /v1/chat/message
+// POST /v1/chat/message  (standard JSON response, backward-compatible)
 router.post(
   '/message',
   apiKeyMiddleware(clientRepository),
   rateLimit,
   chatController.sendMessage,
+);
+
+// POST /v1/chat/stream  (Server-Sent Events — web widget streaming)
+router.post(
+  '/stream',
+  apiKeyMiddleware(clientRepository),
+  rateLimit,
+  chatController.streamMessage,
 );
 
 // GET /v1/chat/history/:session_id

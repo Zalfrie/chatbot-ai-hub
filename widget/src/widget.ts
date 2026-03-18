@@ -48,6 +48,12 @@
     messages: HistoryMessage[];
   }
 
+  type SSEEvent =
+    | { type: 'session'; session_id: string }
+    | { type: 'chunk'; content: string }
+    | { type: 'done'; tokens_used: number }
+    | { type: 'error'; message: string };
+
   // ─────────────────────────────────────────────────────────────────────────────
   // Config & Constants
   // ─────────────────────────────────────────────────────────────────────────────
@@ -347,6 +353,18 @@
 #chub-send:disabled{opacity:.4;cursor:not-allowed}
 #chub-send svg{width:17px;height:17px;fill:#fff;display:block}
 
+/* ── Streaming cursor ── */
+.chub-bot.chub-streaming .chub-msg-text::after{
+  content:'▋';
+  display:inline-block;
+  margin-left:1px;
+  animation:chub-blink 0.9s step-end infinite;
+  opacity:0.7;
+  font-size:12px;
+  vertical-align:text-bottom;
+}
+@keyframes chub-blink{0%,100%{opacity:1}50%{opacity:0}}
+
 /* ── Empty state ── */
 #chub-empty{
   text-align:center;
@@ -578,7 +596,7 @@
     scrollToBottom();
 
     try {
-      const res = await fetch(`${BASE_URL}/v1/chat/message`, {
+      const res = await fetch(`${BASE_URL}/v1/chat/stream`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -587,9 +605,8 @@
         body: JSON.stringify({ session_id: sessionId, message: text }),
       });
 
-      showTyping(false);
-
-      if (!res.ok) {
+      if (!res.ok || !res.body) {
+        showTyping(false);
         const errMsg =
           res.status === 429
             ? 'Terlalu banyak pesan. Tunggu sebentar ya 😊'
@@ -600,21 +617,84 @@
         return;
       }
 
-      const data = (await res.json()) as SendMessageResponse;
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
 
-      // Server may return a canonical session_id — keep it in sync
-      if (data.session_id && data.session_id !== sessionId) {
-        sessionId = data.session_id;
-        localStorage.setItem(STORAGE_KEY, sessionId);
+      // Bot bubble created on first chunk
+      let botBubble: HTMLElement | null = null;
+      let botTextEl: HTMLElement | null = null;
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+
+        // SSE events are separated by double newlines
+        const blocks = buffer.split('\n\n');
+        buffer = blocks.pop() ?? '';
+
+        for (const block of blocks) {
+          const dataLine = block.split('\n').find((l) => l.startsWith('data: '));
+          if (!dataLine) continue;
+
+          let event: SSEEvent;
+          try {
+            event = JSON.parse(dataLine.slice(6)) as SSEEvent;
+          } catch {
+            continue; // Skip malformed events
+          }
+
+          if (event.type === 'session') {
+            if (event.session_id && event.session_id !== sessionId) {
+              sessionId = event.session_id;
+              localStorage.setItem(STORAGE_KEY, sessionId);
+            }
+
+          } else if (event.type === 'chunk') {
+            // Hide typing indicator and create the bot bubble on first chunk
+            if (!botBubble) {
+              showTyping(false);
+              botBubble = el('div', { class: 'chub-msg chub-bot chub-streaming', role: 'article' });
+              botTextEl = el('div', { class: 'chub-msg-text' });
+              botBubble.appendChild(botTextEl);
+              $messages.appendChild(botBubble);
+            }
+            if (botTextEl) {
+              botTextEl.textContent += event.content;
+            }
+            scrollToBottom();
+
+          } else if (event.type === 'done') {
+            // Remove streaming cursor and add timestamp
+            if (botBubble) {
+              botBubble.classList.remove('chub-streaming');
+              const timeEl = el('div', { class: 'chub-msg-time' });
+              timeEl.textContent = fmtTime(new Date());
+              botBubble.appendChild(timeEl);
+            }
+            if (!isOpen) {
+              unreadCount++;
+              updateBadge();
+            }
+
+          } else if (event.type === 'error') {
+            showTyping(false);
+            if (!botBubble) {
+              // Error before any chunk — show error bubble
+              appendMessage('assistant', event.message ?? 'Terjadi kesalahan.', undefined, true, true);
+            }
+          }
+        }
       }
 
-      appendMessage('assistant', data.reply, data.timestamp);
-
-      // Show badge if widget is closed
-      if (!isOpen) {
-        unreadCount++;
-        updateBadge();
+      // If server closed without sending any chunk (e.g. empty response)
+      if (!botBubble) {
+        showTyping(false);
+        appendMessage('assistant', 'Tidak ada respons dari server.', undefined, true, true);
       }
+
     } catch {
       showTyping(false);
       appendMessage(
