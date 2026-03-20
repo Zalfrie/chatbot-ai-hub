@@ -1,12 +1,22 @@
 import { Server as HttpServer } from 'http';
 import { Server as SocketIOServer, Socket } from 'socket.io';
+import { env } from '../config/env';
 
 let io: SocketIOServer | null = null;
 
 export function initSocketGateway(httpServer: HttpServer): SocketIOServer {
+  const allowedOrigins = env.SOCKET_CORS_ORIGIN.split(',').map((o) => o.trim());
+
   io = new SocketIOServer(httpServer, {
     cors: {
-      origin: '*', // Restrict to dashboard origin in production
+      origin: (origin, callback) => {
+        // Allow server-to-server (no origin) and whitelisted origins only
+        if (!origin || allowedOrigins.includes(origin)) {
+          callback(null, true);
+        } else {
+          callback(new Error(`Socket.io CORS: origin ${origin} not allowed`));
+        }
+      },
       methods: ['GET', 'POST'],
     },
     transports: ['websocket', 'polling'],

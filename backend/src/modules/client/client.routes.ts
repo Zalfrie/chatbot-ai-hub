@@ -1,6 +1,6 @@
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
-import { eq, desc, ilike, count } from 'drizzle-orm';
+import { eq, desc } from 'drizzle-orm';
 import { db } from '../../config/database';
 import { clients } from '../../db/schema';
 import { authMiddleware } from '../../middleware/auth.middleware';
@@ -8,6 +8,15 @@ import crypto from 'crypto';
 
 const router = Router();
 router.use(authMiddleware);
+
+/** Only superadmins may manage clients (create, list all, delete). */
+function requireSuperadmin(req: Request, res: Response, next: NextFunction): void {
+  if (req.adminRole !== 'superadmin') {
+    res.status(403).json({ error: 'Forbidden', message: 'Superadmin role required' });
+    return;
+  }
+  next();
+}
 
 const clientSchema = z.object({
   name: z.string().min(1).max(255),
@@ -18,8 +27,8 @@ const clientSchema = z.object({
   isActive: z.boolean().optional(),
 });
 
-// GET /api/clients
-router.get('/', async (_req: Request, res: Response) => {
+// GET /api/clients — superadmin only
+router.get('/', requireSuperadmin, async (_req: Request, res: Response) => {
   try {
     const rows = await db
       .select()
@@ -31,8 +40,8 @@ router.get('/', async (_req: Request, res: Response) => {
   }
 });
 
-// POST /api/clients
-router.post('/', async (req: Request, res: Response) => {
+// POST /api/clients — superadmin only
+router.post('/', requireSuperadmin, async (req: Request, res: Response) => {
   const parsed = clientSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: 'Validation error', details: parsed.error.flatten() });
@@ -94,8 +103,8 @@ router.put('/:id', async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /api/clients/:id
-router.delete('/:id', async (req: Request, res: Response) => {
+// DELETE /api/clients/:id — superadmin only
+router.delete('/:id', requireSuperadmin, async (req: Request, res: Response) => {
   const id = parseInt(req.params['id'] as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: 'Invalid ID' }); return; }
 

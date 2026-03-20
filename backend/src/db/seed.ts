@@ -236,9 +236,10 @@ J: Bisa! Cek Instagram kami @larismaniscake atau minta kakak kirimkan foto langs
     `);
 
     console.log('✅ Seed completed!');
-    console.log(`   📌 Admin: admin@hub.com / ${adminPassword}`);
+    // Never print credentials to logs — check your .env / SEED_ADMIN_PASSWORD env var
+    console.log('   📌 Admin: admin@hub.com / [see SEED_ADMIN_PASSWORD env var]');
     console.log('   📌 Demo client: toko-kue-laris-manis');
-    console.log('   📌 Demo API key: ck_laris_manis_demo_key_2024');
+    console.log('   📌 Demo API key: [see clients table in DB — api_key column]');
   } catch (error) {
     console.error('❌ Seed failed:', error);
     throw error;

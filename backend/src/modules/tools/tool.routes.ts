@@ -1,8 +1,9 @@
 import { Router, Request, Response } from 'express';
-import { z } from 'zod';
+import { z, ZodIssueCode } from 'zod';
 import { authMiddleware } from '../../middleware/auth.middleware';
 import { toolRepository } from './tool.repository';
 import { toolService } from './tool.service';
+import { validateWebhookUrl } from '../../utils/ssrf';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware);
@@ -11,7 +12,12 @@ const toolSchema = z.object({
   name: z.string().regex(/^[a-z][a-z0-9_]{0,98}$/, 'name must be snake_case, max 100 chars'),
   description: z.string().min(10).max(1000),
   parameters_schema: z.record(z.string(), z.unknown()),
-  webhook_url: z.string().url().max(500),
+  webhook_url: z.string().url().max(500).superRefine((url, ctx) => {
+    const check = validateWebhookUrl(url);
+    if (!check.valid) {
+      ctx.addIssue({ code: ZodIssueCode.custom, message: check.error ?? 'Invalid webhook URL' });
+    }
+  }),
   http_method: z.enum(['GET', 'POST']).default('POST'),
   headers_template: z.record(z.string(), z.string()).nullable().optional(),
   timeout_ms: z.number().int().min(500).max(10000).default(5000),

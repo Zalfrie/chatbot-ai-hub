@@ -40,6 +40,7 @@ vi.mock('../../src/config/env', () => ({
     NODE_ENV: 'test',
     JWT_SECRET: 'test-jwt-secret-for-vitest-at-least-32-chars',
     CORS_ORIGINS: 'http://localhost:3000',
+    SOCKET_CORS_ORIGIN: 'http://localhost:3001',
   },
   isProduction: false,
   isTest: true,
@@ -136,6 +137,40 @@ describe('/api/clients — integration', () => {
         .get('/api/clients')
         .set('Authorization', 'Bearer invalid.token.here');
       expect(res.status).toBe(401);
+    });
+  });
+
+  // ── Superadmin guard ─────────────────────────────────────────────────────
+
+  describe('superadmin-only routes', () => {
+    it('GET / returns 403 for role=admin', async () => {
+      const res = await request(app)
+        .get('/api/clients')
+        .set('Authorization', `Bearer ${makeAdminToken('admin')}`);
+      expect(res.status).toBe(403);
+    });
+
+    it('POST / returns 403 for role=admin', async () => {
+      const res = await request(app)
+        .post('/api/clients')
+        .set('Authorization', `Bearer ${makeAdminToken('admin')}`)
+        .send({ name: 'Test', slug: 'test', email: 'test@test.com' });
+      expect(res.status).toBe(403);
+    });
+
+    it('DELETE /:id returns 403 for role=admin', async () => {
+      const res = await request(app)
+        .delete('/api/clients/1')
+        .set('Authorization', `Bearer ${makeAdminToken('admin')}`);
+      expect(res.status).toBe(403);
+    });
+
+    it('GET /:id is accessible for role=admin', async () => {
+      mockChain.limit.mockResolvedValue([mockClient]);
+      const res = await request(app)
+        .get('/api/clients/1')
+        .set('Authorization', `Bearer ${makeAdminToken('admin')}`);
+      expect(res.status).toBe(200);
     });
   });
 

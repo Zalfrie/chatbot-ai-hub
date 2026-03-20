@@ -312,6 +312,71 @@ AI Provider (Groq / Claude) → response kontekstual
 
 ---
 
+## Security
+
+Berikut adalah langkah-langkah keamanan yang sudah diterapkan pada codebase ini.
+
+### SSRF Protection pada Webhook Tool
+
+Setiap URL webhook yang didaftarkan tenant melalui Tool Registry divalidasi untuk mencegah **Server-Side Request Forgery (SSRF)**. URL yang mengarah ke alamat internal atau privat akan ditolak.
+
+Yang diblokir:
+- `localhost`, `127.x.x.x`, `0.0.0.0` (loopback)
+- `10.x.x.x`, `192.168.x.x`, `172.16–31.x.x` (private network)
+- `169.254.x.x` (link-local / AWS metadata endpoint)
+- `metadata.google.internal`, `metadata.gcp.internal` (cloud metadata)
+- Protocol selain `http` / `https` (mis. `file://`, `ftp://`)
+
+Validator ada di `backend/src/utils/ssrf.ts`, diterapkan via Zod `superRefine` di `tool.routes.ts`.
+
+---
+
+### Superadmin-Only untuk Client Management
+
+Operasi sensitif pada data tenant hanya bisa dilakukan oleh role `superadmin`:
+
+| Method | Endpoint | Akses |
+|---|---|---|
+| `GET` | `/api/clients` | Superadmin only |
+| `POST` | `/api/clients` | Superadmin only |
+| `DELETE` | `/api/clients/:id` | Superadmin only |
+| `GET` | `/api/clients/:id` | Semua admin |
+| `PUT` | `/api/clients/:id` | Semua admin |
+
+Admin biasa yang mencoba akses endpoint terbatas akan mendapat `403 Forbidden`.
+
+---
+
+### Rate Limiter — In-Memory Fallback
+
+Rate limiter berbasis Redis menggunakan **in-memory fallback** jika Redis tidak tersedia, sehingga pembatasan request tetap aktif dalam kondisi apapun.
+
+- Redis tersedia → counter disimpan di Redis (akurat, terdistribusi)
+- Redis mati → counter disimpan di memory proses (tetap membatasi, dengan log warning)
+- Sebelumnya: jika Redis mati → rate limit dinonaktifkan total (fail-open)
+
+---
+
+### Socket.io CORS dari Environment Variable
+
+Origin yang diizinkan untuk koneksi Socket.io (real-time QR code WhatsApp) dikonfigurasi via env variable, bukan hardcoded `*`.
+
+```env
+# .env
+SOCKET_CORS_ORIGIN=http://localhost:3001          # development
+SOCKET_CORS_ORIGIN=https://dashboard.yourdomain.com  # production
+```
+
+Koneksi dari origin lain akan ditolak secara otomatis.
+
+---
+
+### Credential Tidak Dicetak ke Log
+
+Script `seed.ts` tidak lagi mencetak plaintext password atau API key ke console output. Informasi login dicek langsung dari environment variable atau database.
+
+---
+
 ## Lihat juga
 
 - [`planning.md`](./planning.md) — Spesifikasi lengkap, schema DB, flow detail, seed data demo
