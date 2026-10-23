@@ -7,16 +7,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 const mockClaudeStream = vi.fn();
 const mockGroqCreate = vi.fn();
 
+// The SDK clients are constructed with `new`, so the mocks use `function`, not arrows
 vi.mock('@anthropic-ai/sdk', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    messages: { stream: mockClaudeStream },
-  })),
+  default: vi.fn().mockImplementation(function () {
+    return { messages: { stream: mockClaudeStream } };
+  }),
 }));
 
 vi.mock('groq-sdk', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    chat: { completions: { create: mockGroqCreate } },
-  })),
+  default: vi.fn().mockImplementation(function () {
+    return { chat: { completions: { create: mockGroqCreate } } };
+  }),
 }));
 
 vi.mock('../../src/config/env', () => ({
