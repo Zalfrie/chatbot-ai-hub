@@ -1,7 +1,7 @@
 import express, { Request, Response } from 'express';
-import cors from 'cors';
 import { env } from './config/env.js';
 import { requestLogger, errorHandler } from './middleware/error.middleware.js';
+import { widgetCors, dashboardCors, parseOrigins } from './middleware/cors.middleware.js';
 import chatRoutes from './modules/chat/chat.routes.js';
 import waRoutes from './modules/whatsapp/wa.routes.js';
 import authRoutes from './modules/auth/auth.routes.js';
@@ -15,21 +15,11 @@ import toolRoutes from './modules/tools/tool.routes.js';
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGINS ?? 'http://localhost:3000').split(',');
-
-app.use(cors({
-  origin: (origin, callback) => {
-    // Allow requests with no origin (curl, Postman, server-to-server)
-    if (!origin || allowedOrigins.includes(origin)) {
-      callback(null, true);
-    } else {
-      callback(new Error(`CORS: origin ${origin} not allowed`));
-    }
-  },
-  credentials: true,
-  methods: ['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  allowedHeaders: ['Content-Type', 'Authorization', 'X-Api-Key'],
-}));
+// ── CORS ──────────────────────────────────────────────────────────────────
+// Widget chat: called from tenant websites on any domain
+app.use('/v1/chat', widgetCors);
+// Dashboard: only the dashboard origin(s) in CORS_ORIGINS
+app.use('/api', dashboardCors(parseOrigins(env.CORS_ORIGINS)));
 
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));

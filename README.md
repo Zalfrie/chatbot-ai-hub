@@ -376,6 +376,21 @@ Koneksi dari origin lain akan ditolak secara otomatis.
 
 ---
 
+### CORS untuk Widget dan Dashboard
+
+- **`/v1/chat/*` (widget):** bisa dipanggil dari website mana pun. Autentikasinya lewat header `X-Api-Key` tanpa cookie, jadi domain tenant tidak perlu didaftarkan.
+- **`/api/*` (dashboard):** browser hanya boleh memanggilnya dari origin yang ada di `CORS_ORIGINS`. Origin lain mendapat `403`.
+
+```env
+# .env (pisahkan dengan koma untuk beberapa origin)
+CORS_ORIGINS=http://localhost:3000                  # development
+CORS_ORIGINS=https://dashboard.yourdomain.com       # production
+```
+
+Request tanpa header `Origin` (curl, server-to-server) tidak terpengaruh.
+
+---
+
 ### Credential Tidak Dicetak ke Log
 
 Script `seed.ts` tidak lagi mencetak plaintext password atau API key ke console output. Informasi login dicek langsung dari environment variable atau database.
