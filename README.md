@@ -1,5 +1,10 @@
 # AI Chatbot Hub
 
+[![CI](https://github.com/Zalfrie/chatbot-ai-hub/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/Zalfrie/chatbot-ai-hub/actions/workflows/ci.yml)
+[![Security](https://github.com/Zalfrie/chatbot-ai-hub/actions/workflows/security.yml/badge.svg?branch=main)](https://github.com/Zalfrie/chatbot-ai-hub/actions/workflows/security.yml)
+
+> Setiap perbaikan bug dan update masuk lewat Pull Request yang lolos CI — lihat [CONTRIBUTING.md](./CONTRIBUTING.md).
+
 Platform SaaS multi-tenant yang menghubungkan chatbot AI ke WhatsApp dan web widget, dirancang untuk UMKM Indonesia.
 
 Setiap tenant (UMKM) mendapat chatbot sendiri dengan knowledge base, nomor WhatsApp, dan API key untuk embed di website mereka.
