@@ -1,4 +1,5 @@
 import { Router, Request, Response } from 'express';
+import { z } from 'zod';
 import { apiKeyMiddleware } from '../../middleware/apikey.middleware';
 import { rateLimitMiddleware } from '../../middleware/ratelimit.middleware';
 import { clientRepository } from '../client/client.repository';
@@ -22,7 +23,7 @@ const chatController = new ChatController(chatService);
 
 const rateLimit = rateLimitMiddleware();
 
-// POST /v1/chat/message  (standard JSON response, backward-compatible)
+// POST /v1/chat/message  (standard JSON response, non-streaming)
 router.post(
   '/message',
   apiKeyMiddleware(clientRepository),
@@ -44,19 +45,20 @@ router.get(
   '/history/:session_id',
   apiKeyMiddleware(clientRepository),
   async (req: Request, res: Response): Promise<void> => {
-    const { session_id } = req.params as { session_id: string };
-
-    const conversation = await conversationRepository.findBySessionId(session_id);
-
-    if (!conversation) {
-      // No history yet — return empty list (not an error)
-      res.json({ messages: [] });
+    // Same rule as the message endpoints: only widget-style UUID sessions are reachable here
+    const parsed = z.uuid().safeParse(req.params['session_id']);
+    if (!parsed.success) {
+      res.status(400).json({ error: 'Bad Request', message: 'session_id must be a UUID' });
       return;
     }
 
-    // Ensure the session belongs to the authenticated client (tenant isolation)
-    if (conversation.clientId !== req.clientId) {
-      res.status(403).json({ error: 'Forbidden' });
+    const clientId = req.clientId!;
+    const conversation = await conversationRepository.findBySessionId(clientId, parsed.data);
+
+    // Only the caller's own web conversations are returned. Anything else gets the same
+    // empty response as "no history yet", so it never reveals that a session exists.
+    if (!conversation || conversation.clientId !== clientId || conversation.channel !== 'web') {
+      res.json({ messages: [] });
       return;
     }
 

@@ -26,9 +26,9 @@ function getPreviewChatService(): ChatService {
   return _previewChatService;
 }
 
+// The preview always uses the tenant's own preview session; callers cannot pick another conversation
 const previewMessageSchema = z.object({
   message: z.string().min(1).max(2000),
-  session_id: z.string().optional(),
 });
 
 // GET /api/clients/:clientId/conversations
@@ -90,8 +90,8 @@ router.post('/stream/preview', async (req: Request, res: Response) => {
     return;
   }
 
-  const { message, session_id } = parsed.data;
-  const sessionId = session_id ?? `preview_${clientId}`;
+  const { message } = parsed.data;
+  const sessionId = `preview_${clientId}`;
 
   res.setHeader('Content-Type', 'text/event-stream');
   res.setHeader('Cache-Control', 'no-cache');

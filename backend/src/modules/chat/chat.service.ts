@@ -374,8 +374,14 @@ export class ChatService {
   }
 
   private async getOrCreateConversation(params: ProcessMessageParams, chatbotId: number) {
-    const existing = await this.convRepo.findBySessionId(params.sessionId);
-    if (existing) return existing;
+    const existing = await this.convRepo.findBySessionId(params.clientId, params.sessionId);
+    if (existing) {
+      // A session lives on one channel: never continue a WhatsApp conversation from the web, or vice versa
+      if (existing.channel !== params.channel) {
+        throw new Error(`Session ${params.sessionId} belongs to the ${existing.channel} channel`);
+      }
+      return existing;
+    }
 
     return this.convRepo.create({
       clientId: params.clientId,

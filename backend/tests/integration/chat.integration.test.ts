@@ -1,5 +1,7 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import request from 'supertest';
+import jwt from 'jsonwebtoken';
+import { z } from 'zod';
 
 // ── Module mocks (hoisted before app import) ──────────────────────────────────
 
@@ -97,6 +99,9 @@ vi.mock('../../src/providers/ai/ai.factory', () => ({
       tokensUsed: 70,
       model: 'llama-3.3-70b-versatile',
     }),
+    chatStream: async function* () {
+      yield 'Halo!';
+    },
   }),
 }));
 
@@ -119,13 +124,15 @@ const CHATBOT = {
   isActive: true,
 };
 
+const SESSION_ID = '0b6f2c1e-8d4a-4c3b-9f1e-2a7d5e6c8b90';
+
 const NEW_CONVERSATION = {
   id: 50,
   clientId: 1,
   chatbotId: 10,
-  sessionId: 'test-session-id',
+  sessionId: SESSION_ID,
   channel: 'web',
-  userIdentifier: 'test-session-id',
+  userIdentifier: SESSION_ID,
 };
 
 // ── Setup / teardown ──────────────────────────────────────────────────────────
@@ -207,13 +214,43 @@ describe('POST /v1/chat/message — integration', () => {
       expect(res.status).toBe(400);
     });
 
-    it('returns 400 when channel is not "web" or "whatsapp"', async () => {
+    it('returns 400 when channel is not "web"', async () => {
       const res = await request(app)
         .post('/v1/chat/message')
         .set('X-Api-Key', 'ck_valid')
         .send({ message: 'halo', channel: 'telegram' });
 
       expect(res.status).toBe(400);
+    });
+
+    it('returns 400 when channel is "whatsapp" (only the WhatsApp handler may use it)', async () => {
+      const res = await request(app)
+        .post('/v1/chat/message')
+        .set('X-Api-Key', 'ck_valid')
+        .send({ message: 'halo', channel: 'whatsapp' });
+
+      expect(res.status).toBe(400);
+      expect(mockConvRepo.create).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 when session_id is not a UUID', async () => {
+      const res = await request(app)
+        .post('/v1/chat/message')
+        .set('X-Api-Key', 'ck_valid')
+        .send({ message: 'halo', session_id: 'wa_2_6281234567890' });
+
+      expect(res.status).toBe(400);
+      expect(mockConvRepo.findBySessionId).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 on the stream endpoint when session_id is not a UUID', async () => {
+      const res = await request(app)
+        .post('/v1/chat/stream')
+        .set('X-Api-Key', 'ck_valid')
+        .send({ message: 'halo', session_id: 'preview_2' });
+
+      expect(res.status).toBe(400);
+      expect(mockConvRepo.findBySessionId).not.toHaveBeenCalled();
     });
   });
 
@@ -237,21 +274,48 @@ describe('POST /v1/chat/message — integration', () => {
       const res = await request(app)
         .post('/v1/chat/message')
         .set('X-Api-Key', 'ck_valid')
-        .send({ message: 'Lanjutkan percakapan', session_id: 'test-session-id' });
+        .send({ message: 'Lanjutkan percakapan', session_id: SESSION_ID });
 
       expect(res.status).toBe(200);
-      expect(res.body.session_id).toBe('test-session-id');
+      expect(res.body.session_id).toBe(SESSION_ID);
+      // The lookup is scoped to the tenant that owns the API key
+      expect(mockConvRepo.findBySessionId).toHaveBeenCalledWith(ACTIVE_CLIENT.id, SESSION_ID);
     });
 
-    it('auto-generates session_id when not provided', async () => {
-      const res = await request(app)
+    it('auto-generates a session_id that the API itself accepts on the next request', async () => {
+      // Echo the generated id back, as the real repository would
+      mockConvRepo.create.mockImplementation(async (p: { sessionId: string }) => ({
+        ...NEW_CONVERSATION,
+        sessionId: p.sessionId,
+      }));
+
+      const first = await request(app)
         .post('/v1/chat/message')
         .set('X-Api-Key', 'ck_valid')
         .send({ message: 'Permintaan baru' });
 
+      expect(first.status).toBe(200);
+      expect(z.uuid().safeParse(first.body.session_id).success).toBe(true);
+
+      const second = await request(app)
+        .post('/v1/chat/message')
+        .set('X-Api-Key', 'ck_valid')
+        .send({ message: 'Lanjut', session_id: first.body.session_id });
+
+      expect(second.status).toBe(200);
+    });
+
+    it('streams a reply and scopes the lookup to the caller tenant on /v1/chat/stream', async () => {
+      const res = await request(app)
+        .post('/v1/chat/stream')
+        .set('X-Api-Key', 'ck_valid')
+        .send({ message: 'halo', session_id: SESSION_ID });
+
       expect(res.status).toBe(200);
-      expect(typeof res.body.session_id).toBe('string');
-      expect(res.body.session_id.length).toBeGreaterThan(0);
+      expect(mockConvRepo.findBySessionId).toHaveBeenCalledWith(ACTIVE_CLIENT.id, SESSION_ID);
+      expect(mockConvRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: ACTIVE_CLIENT.id, sessionId: SESSION_ID, channel: 'web' }),
+      );
     });
 
     it('defaults channel to "web" when not specified', async () => {
@@ -263,13 +327,15 @@ describe('POST /v1/chat/message — integration', () => {
       expect(mockUsageRepo.increment).toHaveBeenCalledWith(1, 'web', expect.any(Number));
     });
 
-    it('accepts "whatsapp" as a valid channel value', async () => {
-      const res = await request(app)
+    it('creates new conversations on the web channel', async () => {
+      await request(app)
         .post('/v1/chat/message')
         .set('X-Api-Key', 'ck_valid')
-        .send({ message: 'halo dari WA', channel: 'whatsapp' });
+        .send({ message: 'halo' });
 
-      expect(res.status).toBe(200);
+      expect(mockConvRepo.create).toHaveBeenCalledWith(
+        expect.objectContaining({ clientId: ACTIVE_CLIENT.id, channel: 'web' }),
+      );
     });
   });
 
@@ -298,15 +364,34 @@ describe('GET /v1/chat/history/:session_id — integration', () => {
     expect(res.status).toBe(401);
   });
 
+  it('returns 400 when session_id is not a UUID', async () => {
+    const res = await request(app)
+      .get('/v1/chat/history/wa_2_6281234567890')
+      .set('X-Api-Key', 'ck_valid');
+
+    expect(res.status).toBe(400);
+    expect(mockConvRepo.findBySessionId).not.toHaveBeenCalled();
+  });
+
   it('returns empty messages array when session does not exist', async () => {
     mockConvRepo.findBySessionId.mockResolvedValue(null);
 
     const res = await request(app)
-      .get('/v1/chat/history/unknown-session')
+      .get(`/v1/chat/history/${SESSION_ID}`)
       .set('X-Api-Key', 'ck_valid');
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ messages: [] });
+  });
+
+  it('looks the session up within the tenant that owns the API key', async () => {
+    mockConvRepo.findBySessionId.mockResolvedValue(null);
+
+    await request(app)
+      .get(`/v1/chat/history/${SESSION_ID}`)
+      .set('X-Api-Key', 'ck_valid');
+
+    expect(mockConvRepo.findBySessionId).toHaveBeenCalledWith(ACTIVE_CLIENT.id, SESSION_ID);
   });
 
   it('returns messages for an existing session belonging to the authenticated client', async () => {
@@ -317,7 +402,7 @@ describe('GET /v1/chat/history/:session_id — integration', () => {
     ]);
 
     const res = await request(app)
-      .get('/v1/chat/history/test-session-id')
+      .get(`/v1/chat/history/${SESSION_ID}`)
       .set('X-Api-Key', 'ck_valid');
 
     expect(res.status).toBe(200);
@@ -325,14 +410,54 @@ describe('GET /v1/chat/history/:session_id — integration', () => {
     expect(res.body.messages[0]).toHaveProperty('role', 'user');
   });
 
-  it('returns 403 when session belongs to a different client', async () => {
-    const otherClientConversation = { ...NEW_CONVERSATION, clientId: 999 };
-    mockConvRepo.findBySessionId.mockResolvedValue(otherClientConversation);
+  // Defense in depth: even if a lookup ever returned a foreign row, nothing leaks and the
+  // response is identical to "not found" (no 403 that would confirm the session exists).
+  it('returns an empty list, not 403, for a conversation owned by another client', async () => {
+    mockConvRepo.findBySessionId.mockResolvedValue({ ...NEW_CONVERSATION, clientId: 999 });
 
     const res = await request(app)
-      .get('/v1/chat/history/other-client-session')
+      .get(`/v1/chat/history/${SESSION_ID}`)
       .set('X-Api-Key', 'ck_valid');
 
-    expect(res.status).toBe(403);
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ messages: [] });
+    expect(mockConvRepo.getHistory).not.toHaveBeenCalled();
+  });
+
+  it('does not return WhatsApp conversations through the public endpoint', async () => {
+    mockConvRepo.findBySessionId.mockResolvedValue({ ...NEW_CONVERSATION, channel: 'whatsapp' });
+
+    const res = await request(app)
+      .get(`/v1/chat/history/${SESSION_ID}`)
+      .set('X-Api-Key', 'ck_valid');
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ messages: [] });
+    expect(mockConvRepo.getHistory).not.toHaveBeenCalled();
+  });
+});
+
+// ── POST /api/clients/:clientId/conversations/stream/preview (dashboard, JWT) ──
+
+describe('POST /api/clients/:clientId/conversations/stream/preview — integration', () => {
+  const authHeader = () => ({
+    Authorization: `Bearer ${jwt.sign(
+      { adminId: 1, role: 'superadmin' },
+      'test-jwt-secret-for-vitest-at-least-32-chars',
+      { expiresIn: '15m' },
+    )}`,
+  });
+
+  it('always uses the tenant preview session and ignores a session_id in the body', async () => {
+    mockConvRepo.create.mockResolvedValue({ ...NEW_CONVERSATION, clientId: 2, sessionId: 'preview_2' });
+
+    const res = await request(app)
+      .post('/api/clients/2/conversations/stream/preview')
+      .set(authHeader())
+      .send({ message: 'tes', session_id: SESSION_ID });
+
+    expect(res.status).toBe(200);
+    expect(mockConvRepo.findBySessionId).toHaveBeenCalledWith(2, 'preview_2');
+    expect(mockConvRepo.findBySessionId).not.toHaveBeenCalledWith(expect.anything(), SESSION_ID);
   });
 });

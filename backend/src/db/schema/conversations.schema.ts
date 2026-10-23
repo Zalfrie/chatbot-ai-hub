@@ -4,6 +4,7 @@ import {
   varchar,
   timestamp,
   index,
+  unique,
   pgEnum,
   jsonb,
 } from 'drizzle-orm/pg-core';
@@ -17,7 +18,7 @@ export const conversations = pgTable('conversations', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),
   clientId: bigserial('client_id', { mode: 'number' }).notNull().references(() => clients.id),
   chatbotId: bigserial('chatbot_id', { mode: 'number' }).notNull().references(() => chatbots.id),
-  sessionId: varchar('session_id', { length: 128 }).notNull().unique(),
+  sessionId: varchar('session_id', { length: 128 }).notNull(),
   channel: conversationChannelEnum('channel').notNull(),
   userIdentifier: varchar('user_identifier', { length: 100 }),
   userName: varchar('user_name', { length: 255 }),
@@ -27,6 +28,8 @@ export const conversations = pgTable('conversations', {
   lastMessageAt: timestamp('last_message_at', { withTimezone: true }),
   closedAt: timestamp('closed_at', { withTimezone: true }),
 }, (table) => [
+  // Session ids are scoped to a tenant: the same id under two clients is two conversations
+  unique('conversations_client_id_session_id_unique').on(table.clientId, table.sessionId),
   index('idx_conv_client').on(table.clientId),
   index('idx_conv_session').on(table.sessionId),
   index('idx_conv_user').on(table.clientId, table.userIdentifier),
