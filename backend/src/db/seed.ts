@@ -28,30 +28,7 @@ async function seed() {
     await db.execute(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await db.execute(`CREATE EXTENSION IF NOT EXISTS "pg_trgm"`);
 
-    // Create updated_at trigger function
-    await db.execute(`
-      CREATE OR REPLACE FUNCTION set_updated_at()
-      RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = NOW();
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql
-    `);
-
-    // Create triggers for updated_at
-    for (const [table, triggerName] of [
-      ['clients', 'trg_clients_updated'],
-      ['chatbots', 'trg_chatbots_updated'],
-      ['knowledge_bases', 'trg_knowledge_updated'],
-    ] as [string, string][]) {
-      await db.execute(`
-        DROP TRIGGER IF EXISTS ${triggerName} ON ${table};
-        CREATE TRIGGER ${triggerName}
-        BEFORE UPDATE ON ${table}
-        FOR EACH ROW EXECUTE FUNCTION set_updated_at()
-      `);
-    }
+    // The updated_at function and triggers come from the migrations (0005), so run db:migrate first
 
     // Seed superadmin — password di-hash otomatis saat seed dijalankan
     const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345';

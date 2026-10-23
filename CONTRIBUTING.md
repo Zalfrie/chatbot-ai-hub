@@ -29,12 +29,20 @@ Dependency updates arrive automatically as Dependabot PRs every Monday and go th
 
 Backend tests mock PostgreSQL, Redis, and the AI providers, so no services need to be running.
 
+The migration tests are the exception. They apply `src/db/migrations` to throwaway databases on a real Postgres and are skipped unless `MIGRATION_TEST_DATABASE_URL` points at a server where that user may create databases:
+
+```bash
+MIGRATION_TEST_DATABASE_URL=postgres://postgres:postgres@localhost:5432/postgres npm run test:migrations
+```
+
+Schema changes go through `npm run db:generate`, never through hand-written journal entries. Drizzle only applies a migration whose `when` is newer than the last applied one.
+
 To check that the compiled backend actually starts the way `npm start` runs it, point the `DB_*` and `REDIS_*` variables at a running Postgres and Redis and run `npm run build && npm run smoke` in `backend/`. Use an empty database for this, because the server restores the WhatsApp sessions it finds on startup.
 
 ## Pipelines
 
 | Workflow | Runs on | What it checks |
 |---|---|---|
-| `.github/workflows/ci.yml` | every PR, push to `main` | Backend type-check, tests with coverage thresholds, build. Backend start: boots the compiled server against Postgres and Redis service containers and checks `/health`. Frontend `nuxi typecheck` and build. Widget type-check, build, and zero-dependency guard. PR title format. `CI passed` aggregates all of them. |
+| `.github/workflows/ci.yml` | every PR, push to `main` | Backend type-check, tests with coverage thresholds, build. Backend start: boots the compiled server against Postgres and Redis service containers and checks `/health`. Migrations: schema/migration drift check, migration tests and `db:migrate` against a Postgres service container. Frontend `nuxi typecheck` and build. Widget type-check, build, and zero-dependency guard. PR title format. `CI passed` aggregates all of them. |
 | `.github/workflows/security.yml` | every PR, push to `main`, Mondays | CodeQL static analysis; dependency review blocks PRs that add a dependency with a high/critical advisory |
 | `.github/dependabot.yml` | Mondays 07:00 WIB | Opens update PRs for npm (backend, frontend, widget) and GitHub Actions |

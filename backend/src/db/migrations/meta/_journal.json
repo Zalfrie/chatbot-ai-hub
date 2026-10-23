@@ -36,6 +36,13 @@
       "when": 1792777051894,
       "tag": "0004_conversation_session_per_tenant",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1792782257409,
+      "tag": "0005_catch_up_tenant_tools",
+      "breakpoints": true
     }
   ]
 }
