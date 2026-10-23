@@ -35,7 +35,7 @@
     "drizzle-orm": "^0.45.4",
     "express": "^5.3.0",
     "groq-sdk": "^1.6.0",
-    "ioredis": "^5.10.0",
+    "ioredis": "^6.0.0",
     "jsonwebtoken": "^9.0.3",
     "mammoth": "^1.13.0",
     "multer": "^2.4.0",
