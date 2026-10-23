@@ -294,7 +294,7 @@ async function submitForm() {
 async function confirmDelete(tool: Tool) {
   if (!confirm(`Hapus tool "${tool.name}"? Tindakan ini tidak bisa dibatalkan.`)) return
   try {
-    await api.delete(`/api/clients/${clientId}/tools/${tool.id}`)
+    await api.del(`/api/clients/${clientId}/tools/${tool.id}`)
     await refresh()
   } catch {
     alert('Gagal menghapus tool')
