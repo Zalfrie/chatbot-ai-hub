@@ -32,12 +32,6 @@
     baseUrl?: string;
   }
 
-  interface SendMessageResponse {
-    session_id: string;
-    reply: string;
-    timestamp?: string;
-  }
-
   interface HistoryMessage {
     role: 'user' | 'assistant';
     content: string;
@@ -786,7 +780,7 @@
   // ─────────────────────────────────────────────────────────────────────────────
 
   /** Create element with attribute shorthand */
-  function el(tag: string, attrs: Record<string, string> = {}): HTMLElement {
+  function el<K extends keyof HTMLElementTagNameMap>(tag: K, attrs: Record<string, string> = {}): HTMLElementTagNameMap[K] {
     const e = document.createElement(tag);
     for (const [k, v] of Object.entries(attrs)) {
       if (k === 'class') {
