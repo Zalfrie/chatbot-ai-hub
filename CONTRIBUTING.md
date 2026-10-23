@@ -29,7 +29,7 @@ Dependency updates arrive automatically as Dependabot PRs every Monday and go th
 
 Backend tests mock PostgreSQL, Redis, and the AI providers, so no services need to be running.
 
-To check that the compiled backend actually starts, as `npm start` and PM2 run it, point the `DB_*` and `REDIS_*` variables at a running Postgres and Redis and run `npm run build && npm run smoke` in `backend/`. Use an empty database for this, because the server restores the WhatsApp sessions it finds on startup.
+To check that the compiled backend actually starts the way `npm start` runs it, point the `DB_*` and `REDIS_*` variables at a running Postgres and Redis and run `npm run build && npm run smoke` in `backend/`. Use an empty database for this, because the server restores the WhatsApp sessions it finds on startup.
 
 ## Pipelines
 

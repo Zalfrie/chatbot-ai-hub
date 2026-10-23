@@ -78,9 +78,9 @@ jobs:
           --health-interval 5s
           --health-timeout 5s
           --health-retries 10
-    # Throwaway values for the CI containers only
+    # Throwaway values for the CI containers only. NODE_ENV is set on the start step alone,
+    # because `npm ci` would skip the devDependencies (types, tsc) that the build needs
     env:
-      NODE_ENV: production
       PORT: '3000'
       DB_HOST: localhost
       DB_PORT: '5432'
@@ -103,6 +103,8 @@ jobs:
       - name: Build
         run: npm run build
       - name: Start dist/index.js and wait for /health
+        env:
+          NODE_ENV: production
         run: npm run smoke
 
   frontend:
