@@ -3,10 +3,13 @@ import { z } from 'zod';
 import { ChatService } from './chat.service';
 
 const sendMessageSchema = z.object({
-  session_id: z.string().min(1).optional(),
+  // UUIDs only: server-generated WhatsApp (`wa_…`) and dashboard preview (`preview_…`)
+  // session ids must not be reachable through the public, API-key endpoints
+  session_id: z.uuid().optional(),
   message: z.string().min(1, 'message is required').max(2000, 'message too long (max 2000 chars)'),
   user_name: z.string().optional(),
-  channel: z.enum(['web', 'whatsapp']).default('web'),
+  // The whatsapp channel is reserved for the Baileys handler
+  channel: z.literal('web').default('web'),
 });
 
 export class ChatController {

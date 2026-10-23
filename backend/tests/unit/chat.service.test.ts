@@ -144,7 +144,8 @@ describe('ChatService.processMessage', () => {
     );
     await service.processMessage(baseParams);
 
-    expect(deps.convRepo.findBySessionId).toHaveBeenCalledWith('sess-test-abc');
+    // Lookup must be scoped to the caller's tenant
+    expect(deps.convRepo.findBySessionId).toHaveBeenCalledWith(1, 'sess-test-abc');
     expect(deps.convRepo.create).toHaveBeenCalledWith(
       expect.objectContaining({
         clientId: 1,
@@ -165,6 +166,21 @@ describe('ChatService.processMessage', () => {
     await service.processMessage(baseParams);
 
     expect(deps.convRepo.create).not.toHaveBeenCalled();
+  });
+
+  it('refuses to continue a conversation that belongs to another channel', async () => {
+    const deps = makeDeps({
+      convRepo: {
+        findBySessionId: vi.fn().mockResolvedValue({ ...mockConversation, channel: 'whatsapp' }),
+      },
+    });
+    const service = new ChatService(
+      deps.chatbotRepo, deps.knowledgeRepo, deps.convRepo, deps.usageRepo, mockAIProvider,
+    );
+
+    await expect(service.processMessage(baseParams)).rejects.toThrow('belongs to the whatsapp channel');
+    expect(deps.convRepo.saveMessage).not.toHaveBeenCalled();
+    expect(mockAIProvider.chat).not.toHaveBeenCalled();
   });
 
   // ── History loading ───────────────────────────────────────────────────────

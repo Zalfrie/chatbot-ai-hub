@@ -12,11 +12,12 @@ export interface CreateConversationParams {
 }
 
 export class ConversationRepository {
-  async findBySessionId(sessionId: string): Promise<Conversation | null> {
+  // Session ids are only unique per tenant, so the lookup must always include clientId
+  async findBySessionId(clientId: number, sessionId: string): Promise<Conversation | null> {
     const [conv] = await db
       .select()
       .from(conversations)
-      .where(eq(conversations.sessionId, sessionId))
+      .where(and(eq(conversations.clientId, clientId), eq(conversations.sessionId, sessionId)))
       .limit(1);
     return conv ?? null;
   }
