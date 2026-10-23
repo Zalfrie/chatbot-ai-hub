@@ -1,17 +1,17 @@
 import express, { Request, Response } from 'express';
 import cors from 'cors';
-import { env } from './config/env';
-import { requestLogger, errorHandler } from './middleware/error.middleware';
-import chatRoutes from './modules/chat/chat.routes';
-import waRoutes from './modules/whatsapp/wa.routes';
-import authRoutes from './modules/auth/auth.routes';
-import dashboardRoutes from './modules/dashboard/dashboard.routes';
-import clientRoutes from './modules/client/client.routes';
-import chatbotRoutes from './modules/chatbot/chatbot.routes';
-import knowledgeRoutes from './modules/knowledge/knowledge.routes';
-import conversationRoutes from './modules/chat/conversation.routes';
-import analyticsRoutes from './modules/analytics/analytics.routes';
-import toolRoutes from './modules/tools/tool.routes';
+import { env } from './config/env.js';
+import { requestLogger, errorHandler } from './middleware/error.middleware.js';
+import chatRoutes from './modules/chat/chat.routes.js';
+import waRoutes from './modules/whatsapp/wa.routes.js';
+import authRoutes from './modules/auth/auth.routes.js';
+import dashboardRoutes from './modules/dashboard/dashboard.routes.js';
+import clientRoutes from './modules/client/client.routes.js';
+import chatbotRoutes from './modules/chatbot/chatbot.routes.js';
+import knowledgeRoutes from './modules/knowledge/knowledge.routes.js';
+import conversationRoutes from './modules/chat/conversation.routes.js';
+import analyticsRoutes from './modules/analytics/analytics.routes.js';
+import toolRoutes from './modules/tools/tool.routes.js';
 
 const app = express();
 

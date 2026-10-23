@@ -1,8 +1,8 @@
-import { toolRepository } from './tool.repository';
-import { toolExecutor } from './tool.executor';
-import { ToolDefinitionForAI, ToolExecutionResult } from './tool.types';
-import { ToolCallRequest } from '../../providers/ai/ai.interface';
-import { logger } from '../../utils/logger';
+import { toolRepository } from './tool.repository.js';
+import { toolExecutor } from './tool.executor.js';
+import { ToolDefinitionForAI, ToolExecutionResult } from './tool.types.js';
+import { ToolCallRequest } from '../../providers/ai/ai.interface.js';
+import { logger } from '../../utils/logger.js';
 
 export class ToolService {
   /**

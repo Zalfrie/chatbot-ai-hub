@@ -49,6 +49,64 @@ jobs:
           retention-days: 7
           if-no-files-found: ignore
 
+  backend-start:
+    name: Backend start
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    defaults:
+      run:
+        working-directory: backend
+    # The compiled server checks Postgres and Redis before it listens, so run it against real ones
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: chatbot_hub
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports: ['6379:6379']
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    # Throwaway values for the CI containers only. NODE_ENV is set on the start step alone,
+    # because `npm ci` would skip the devDependencies (types, tsc) that the build needs
+    env:
+      PORT: '3000'
+      DB_HOST: localhost
+      DB_PORT: '5432'
+      DB_USER: postgres
+      DB_PASSWORD: postgres
+      DB_NAME: chatbot_hub
+      REDIS_HOST: localhost
+      REDIS_PORT: '6379'
+      JWT_SECRET: ci-only-jwt-secret-for-the-start-check
+      WA_ENCRYPTION_KEY: abababababababababababababababababababababababababababababababab
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v7
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Install dependencies
+        run: npm ci
+      - name: Build
+        run: npm run build
+      - name: Start dist/index.js and wait for /health
+        env:
+          NODE_ENV: production
+        run: npm run smoke
+
   frontend:
     name: Frontend
     runs-on: ubuntu-latest
@@ -121,7 +179,7 @@ jobs:
   ci-passed:
     name: CI passed
     if: always()
-    needs: [backend, frontend, widget, pr-title]
+    needs: [backend, backend-start, frontend, widget, pr-title]
     runs-on: ubuntu-latest
     timeout-minutes: 2
     steps:

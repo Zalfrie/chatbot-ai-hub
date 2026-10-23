@@ -11,7 +11,7 @@ import {
   integer,
   pgEnum,
 } from 'drizzle-orm/pg-core';
-import { clients } from './clients.schema';
+import { clients } from './clients.schema.js';
 
 export const channelEnum = pgEnum('channel', ['web', 'whatsapp', 'both']);
 export const aiProviderEnum = pgEnum('ai_provider', ['claude', 'openai', 'gemini', 'groq']);

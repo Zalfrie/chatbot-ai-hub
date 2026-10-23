@@ -8,8 +8,8 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { clients } from './clients.schema';
-import { knowledgeBases } from './knowledge_bases.schema';
+import { clients } from './clients.schema.js';
+import { knowledgeBases } from './knowledge_bases.schema.js';
 
 export const knowledgeSources = pgTable('knowledge_sources', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),

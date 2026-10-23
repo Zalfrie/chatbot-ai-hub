@@ -1,9 +1,9 @@
 import type { WASocket } from '@whiskeysockets/baileys';
 import type { proto } from '@whiskeysockets/baileys';
-import { ChatService } from '../chat/chat.service';
-import { ChatbotRepository } from '../chatbot/chatbot.repository';
-import { KnowledgeRepository } from '../knowledge/knowledge.repository';
-import { ConversationRepository, UsageRepository } from '../chat/conversation.repository';
+import { ChatService } from '../chat/chat.service.js';
+import { ChatbotRepository } from '../chatbot/chatbot.repository.js';
+import { KnowledgeRepository } from '../knowledge/knowledge.repository.js';
+import { ConversationRepository, UsageRepository } from '../chat/conversation.repository.js';
 
 /**
  * Factory that creates the incoming-WhatsApp-message handler.

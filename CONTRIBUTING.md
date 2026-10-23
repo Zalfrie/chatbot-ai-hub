@@ -29,10 +29,12 @@ Dependency updates arrive automatically as Dependabot PRs every Monday and go th
 
 Backend tests mock PostgreSQL, Redis, and the AI providers, so no services need to be running.
 
+To check that the compiled backend actually starts the way `npm start` runs it, point the `DB_*` and `REDIS_*` variables at a running Postgres and Redis and run `npm run build && npm run smoke` in `backend/`. Use an empty database for this, because the server restores the WhatsApp sessions it finds on startup.
+
 ## Pipelines
 
 | Workflow | Runs on | What it checks |
 |---|---|---|
-| `.github/workflows/ci.yml` | every PR, push to `main` | Backend type-check, tests with coverage thresholds, build. Frontend `nuxi typecheck` and build. Widget type-check, build, and zero-dependency guard. PR title format. `CI passed` aggregates all of them. |
+| `.github/workflows/ci.yml` | every PR, push to `main` | Backend type-check, tests with coverage thresholds, build. Backend start: boots the compiled server against Postgres and Redis service containers and checks `/health`. Frontend `nuxi typecheck` and build. Widget type-check, build, and zero-dependency guard. PR title format. `CI passed` aggregates all of them. |
 | `.github/workflows/security.yml` | every PR, push to `main`, Mondays | CodeQL static analysis; dependency review blocks PRs that add a dependency with a high/critical advisory |
 | `.github/dependabot.yml` | Mondays 07:00 WIB | Opens update PRs for npm (backend, frontend, widget) and GitHub Actions |

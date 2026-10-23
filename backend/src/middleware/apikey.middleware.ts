@@ -1,5 +1,5 @@
 import { Request, Response, NextFunction } from 'express';
-import { ClientRepository } from '../modules/client/client.repository';
+import { ClientRepository } from '../modules/client/client.repository.js';
 
 // Extend Express Request to carry the authenticated client
 declare global {

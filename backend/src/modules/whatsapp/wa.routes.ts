@@ -1,6 +1,6 @@
 import { Router } from 'express';
-import { authMiddleware } from '../../middleware/auth.middleware';
-import { connectWa, getWaStatus, disconnectWa } from './wa.controller';
+import { authMiddleware } from '../../middleware/auth.middleware.js';
+import { connectWa, getWaStatus, disconnectWa } from './wa.controller.js';
 
 const router = Router({ mergeParams: true });
 

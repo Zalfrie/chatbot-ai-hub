@@ -1,7 +1,7 @@
 import Groq from 'groq-sdk';
 import type { ChatCompletionMessageParam, ChatCompletionTool } from 'groq-sdk/resources/chat/completions';
-import { AIProvider, ChatMessage, ChatRequest, ChatResponse, ToolCallRequest } from './ai.interface';
-import { env } from '../../config/env';
+import { AIProvider, ChatMessage, ChatRequest, ChatResponse, ToolCallRequest } from './ai.interface.js';
+import { env } from '../../config/env.js';
 
 function toGroqMessages(
   system: string,

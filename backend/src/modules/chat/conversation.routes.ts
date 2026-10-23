@@ -1,12 +1,12 @@
 import { Router, Request, Response } from 'express';
 import { eq, and, desc, asc } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { conversations, messages } from '../../db/schema';
-import { authMiddleware } from '../../middleware/auth.middleware';
-import { chatbotRepository } from '../chatbot/chatbot.repository';
-import { knowledgeRepository } from '../knowledge/knowledge.repository';
-import { conversationRepository, usageRepository } from './conversation.repository';
-import { ChatService } from './chat.service';
+import { db } from '../../config/database.js';
+import { conversations, messages } from '../../db/schema/index.js';
+import { authMiddleware } from '../../middleware/auth.middleware.js';
+import { chatbotRepository } from '../chatbot/chatbot.repository.js';
+import { knowledgeRepository } from '../knowledge/knowledge.repository.js';
+import { conversationRepository, usageRepository } from './conversation.repository.js';
+import { ChatService } from './chat.service.js';
 import { z } from 'zod';
 
 const router = Router({ mergeParams: true });

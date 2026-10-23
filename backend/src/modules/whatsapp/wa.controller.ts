@@ -1,7 +1,7 @@
 import { Request, Response } from 'express';
-import { whatsAppService } from './wa.service';
-import { clientRepository } from '../client/client.repository';
-import { logger } from '../../utils/logger';
+import { whatsAppService } from './wa.service.js';
+import { clientRepository } from '../client/client.repository.js';
+import { logger } from '../../utils/logger.js';
 
 /**
  * POST /api/clients/:id/wa/connect

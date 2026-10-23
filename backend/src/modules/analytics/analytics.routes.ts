@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { eq, and, gte, lte, sum, count } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { usageLogs, conversations } from '../../db/schema';
-import { authMiddleware } from '../../middleware/auth.middleware';
+import { db } from '../../config/database.js';
+import { usageLogs, conversations } from '../../db/schema/index.js';
+import { authMiddleware } from '../../middleware/auth.middleware.js';
 
 const analyticsQuerySchema = z.object({
   from: z

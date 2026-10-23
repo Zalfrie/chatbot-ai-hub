@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { clients, Client } from '../../db/schema';
+import { db } from '../../config/database.js';
+import { clients, Client } from '../../db/schema/index.js';
 
 export class ClientRepository {
   async findByApiKey(apiKey: string): Promise<Client | null> {

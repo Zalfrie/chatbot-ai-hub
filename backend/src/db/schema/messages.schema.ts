@@ -9,7 +9,7 @@ import {
   boolean,
   pgEnum,
 } from 'drizzle-orm/pg-core';
-import { conversations } from './conversations.schema';
+import { conversations } from './conversations.schema.js';
 
 export const messageRoleEnum = pgEnum('message_role', ['user', 'assistant', 'system']);
 

@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { chatbots, Chatbot } from '../../db/schema';
+import { db } from '../../config/database.js';
+import { chatbots, Chatbot } from '../../db/schema/index.js';
 
 export class ChatbotRepository {
   async findByClientId(clientId: number): Promise<Chatbot | null> {

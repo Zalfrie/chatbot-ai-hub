@@ -1,13 +1,13 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
-import { apiKeyMiddleware } from '../../middleware/apikey.middleware';
-import { rateLimitMiddleware } from '../../middleware/ratelimit.middleware';
-import { clientRepository } from '../client/client.repository';
-import { chatbotRepository } from '../chatbot/chatbot.repository';
-import { knowledgeRepository } from '../knowledge/knowledge.repository';
-import { conversationRepository, usageRepository } from './conversation.repository';
-import { ChatService } from './chat.service';
-import { ChatController } from './chat.controller';
+import { apiKeyMiddleware } from '../../middleware/apikey.middleware.js';
+import { rateLimitMiddleware } from '../../middleware/ratelimit.middleware.js';
+import { clientRepository } from '../client/client.repository.js';
+import { chatbotRepository } from '../chatbot/chatbot.repository.js';
+import { knowledgeRepository } from '../knowledge/knowledge.repository.js';
+import { conversationRepository, usageRepository } from './conversation.repository.js';
+import { ChatService } from './chat.service.js';
+import { ChatController } from './chat.controller.js';
 
 const router = Router();
 

@@ -1,5 +1,5 @@
-import Redis from 'ioredis';
-import { env } from './env';
+import { Redis } from 'ioredis';
+import { env } from './env.js';
 
 class RedisClient {
   private static instance: Redis;

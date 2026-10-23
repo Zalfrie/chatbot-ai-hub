@@ -1,6 +1,6 @@
 import { eq } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { waSessions, WaSession } from '../../db/schema';
+import { db } from '../../config/database.js';
+import { waSessions, WaSession } from '../../db/schema/index.js';
 
 export class WaSessionRepository {
   async findByClientId(clientId: number): Promise<WaSession | null> {

@@ -8,7 +8,7 @@ import {
   uniqueIndex,
   pgEnum,
 } from 'drizzle-orm/pg-core';
-import { clients } from './clients.schema';
+import { clients } from './clients.schema.js';
 
 export const usageChannelEnum = pgEnum('usage_channel', ['web', 'whatsapp']);
 

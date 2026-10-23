@@ -1,15 +1,15 @@
-import { redis } from '../../config/redis';
-import { AIProvider, ChatMessage, MessageContentPart } from '../../providers/ai/ai.interface';
-import { createAIProvider } from '../../providers/ai/ai.factory';
-import { buildSystemPrompt } from '../../utils/prompt-builder';
-import { ChatbotRepository } from '../chatbot/chatbot.repository';
-import { KnowledgeRepository } from '../knowledge/knowledge.repository';
-import { ConversationRepository, UsageRepository } from './conversation.repository';
-import { PineconeService, getPineconeService } from '../../providers/ai/pinecone.service';
-import { toolRepository } from '../tools/tool.repository';
-import { toolService } from '../tools/tool.service';
-import { ToolExecutionResult } from '../tools/tool.types';
-import { logger } from '../../utils/logger';
+import { redis } from '../../config/redis.js';
+import { AIProvider, ChatMessage, MessageContentPart } from '../../providers/ai/ai.interface.js';
+import { createAIProvider } from '../../providers/ai/ai.factory.js';
+import { buildSystemPrompt } from '../../utils/prompt-builder.js';
+import { ChatbotRepository } from '../chatbot/chatbot.repository.js';
+import { KnowledgeRepository } from '../knowledge/knowledge.repository.js';
+import { ConversationRepository, UsageRepository } from './conversation.repository.js';
+import { PineconeService, getPineconeService } from '../../providers/ai/pinecone.service.js';
+import { toolRepository } from '../tools/tool.repository.js';
+import { toolService } from '../tools/tool.service.js';
+import { ToolExecutionResult } from '../tools/tool.types.js';
+import { logger } from '../../utils/logger.js';
 
 export interface ProcessMessageParams {
   clientId: number;

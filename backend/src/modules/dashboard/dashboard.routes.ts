@@ -1,8 +1,8 @@
 import { Router, Request, Response } from 'express';
 import { eq, count, sum } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { clients, conversations, usageLogs, waSessions } from '../../db/schema';
-import { authMiddleware } from '../../middleware/auth.middleware';
+import { db } from '../../config/database.js';
+import { clients, conversations, usageLogs, waSessions } from '../../db/schema/index.js';
+import { authMiddleware } from '../../middleware/auth.middleware.js';
 
 const router = Router();
 router.use(authMiddleware);

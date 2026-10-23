@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { ChatService } from './chat.service';
+import { ChatService } from './chat.service.js';
 
 const sendMessageSchema = z.object({
   // UUIDs only: server-generated WhatsApp (`wa_…`) and dashboard preview (`preview_…`)

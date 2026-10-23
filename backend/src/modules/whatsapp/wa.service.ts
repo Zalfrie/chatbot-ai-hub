@@ -5,9 +5,9 @@ import type {
   SignalDataTypeMap,
 } from '@whiskeysockets/baileys';
 import QRCode from 'qrcode';
-import { WaSessionRepository, waSessionRepository } from './wa.session.repository';
-import { emitToClient } from '../../socket/socket.gateway';
-import { encrypt, decrypt } from '../../utils/crypto';
+import { WaSessionRepository, waSessionRepository } from './wa.session.repository.js';
+import { emitToClient } from '../../socket/socket.gateway.js';
+import { encrypt, decrypt } from '../../utils/crypto.js';
 
 // ---------------------------------------------------------------------------
 // Types

@@ -1,7 +1,7 @@
 {
   "compilerOptions": {
     "target": "ES2020",
-    "module": "ES2022",
+    "module": "NodeNext",
     "lib": ["ES2020"],
     "outDir": "./dist",
     "rootDir": "./src",
@@ -20,17 +20,7 @@
     "noImplicitThis": true,
     "noImplicitReturns": true,
     "noFallthroughCasesInSwitch": true,
-    "moduleResolution": "bundler",
-    "baseUrl": "./",
-    "paths": {
-      "@/*": ["src/*"],
-      "@/config/*": ["src/config/*"],
-      "@/modules/*": ["src/modules/*"],
-      "@/providers/*": ["src/providers/*"],
-      "@/middleware/*": ["src/middleware/*"],
-      "@/db/*": ["src/db/*"],
-      "@/utils/*": ["src/utils/*"]
-    }
+    "moduleResolution": "NodeNext"
   },
   "include": [
     "src/**/*"

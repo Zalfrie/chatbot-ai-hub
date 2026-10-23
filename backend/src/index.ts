@@ -1,15 +1,15 @@
 import http from 'http';
-import { env } from './config/env';
-import { logger } from './utils/logger';
+import { env } from './config/env.js';
+import { logger } from './utils/logger.js';
 
 async function startServer() {
-  const app = (await import('./app')).default;
-  const { db } = await import('./config/database');
-  const { redis } = await import('./config/redis');
+  const app = (await import('./app.js')).default;
+  const { db } = await import('./config/database.js');
+  const { redis } = await import('./config/redis.js');
   const { sql } = await import('drizzle-orm');
-  const { initSocketGateway } = await import('./socket/socket.gateway');
-  const { whatsAppService } = await import('./modules/whatsapp/wa.service');
-  const { createWaMessageHandler, waMessageHandlerChatService } = await import('./modules/whatsapp/wa.handler');
+  const { initSocketGateway } = await import('./socket/socket.gateway.js');
+  const { whatsAppService } = await import('./modules/whatsapp/wa.service.js');
+  const { createWaMessageHandler, waMessageHandlerChatService } = await import('./modules/whatsapp/wa.handler.js');
 
   const PORT = parseInt(env.PORT);
 
@@ -64,4 +64,9 @@ async function startServer() {
   }
 }
 
-startServer();
+// A failure before the try block (e.g. a module that cannot load) is otherwise an unhandled rejection,
+// which winston's handler swallows outside production: the process exits with code 0 and prints nothing
+startServer().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});

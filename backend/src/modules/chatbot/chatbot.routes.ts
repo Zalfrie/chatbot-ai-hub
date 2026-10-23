@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { z } from 'zod';
 import { eq } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { chatbots } from '../../db/schema';
-import { authMiddleware } from '../../middleware/auth.middleware';
+import { db } from '../../config/database.js';
+import { chatbots } from '../../db/schema/index.js';
+import { authMiddleware } from '../../middleware/auth.middleware.js';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware);

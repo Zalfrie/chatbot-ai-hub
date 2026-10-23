@@ -1,9 +1,9 @@
 import { Router, Request, Response } from 'express';
 import { z, ZodIssueCode } from 'zod';
-import { authMiddleware } from '../../middleware/auth.middleware';
-import { toolRepository } from './tool.repository';
-import { toolService } from './tool.service';
-import { validateWebhookUrl } from '../../utils/ssrf';
+import { authMiddleware } from '../../middleware/auth.middleware.js';
+import { toolRepository } from './tool.repository.js';
+import { toolService } from './tool.service.js';
+import { validateWebhookUrl } from '../../utils/ssrf.js';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware);
