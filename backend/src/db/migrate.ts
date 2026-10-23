@@ -18,7 +18,9 @@ const connectionString = DATABASE_URL
   ?? `postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 
 async function runMigrations() {
-  const migrationClient = postgres(connectionString, { max: 1 });
+  // Fail instead of waiting behind a long-running transaction: a queued ALTER would block every
+  // later query on that table until it gets its lock. Re-run db:migrate when the database is quieter.
+  const migrationClient = postgres(connectionString, { max: 1, connection: { lock_timeout: 10_000 } });
   const db = drizzle(migrationClient);
 
   console.log('⏳ Running migrations...');

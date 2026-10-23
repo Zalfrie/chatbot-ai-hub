@@ -1,5 +1,14 @@
 -- Phase 10: Tool Use / Function Calling per-tenant
 
+-- Needed by the trigger below; on a new database nothing else has created it yet
+CREATE OR REPLACE FUNCTION set_updated_at()
+RETURNS TRIGGER AS $$
+BEGIN
+  NEW.updated_at = NOW();
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
 CREATE TABLE IF NOT EXISTS tenant_tools (
   id                BIGSERIAL PRIMARY KEY,
   client_id         BIGINT NOT NULL REFERENCES clients(id) ON DELETE CASCADE,

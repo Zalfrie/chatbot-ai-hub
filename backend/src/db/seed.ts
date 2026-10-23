@@ -1,3 +1,4 @@
+import { readFileSync } from 'node:fs';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import bcrypt from 'bcrypt';
@@ -17,41 +18,33 @@ const {
 const connectionString = DATABASE_URL
   ?? `postgresql://${DB_USER}:${DB_PASSWORD}@${DB_HOST}:${DB_PORT}/${DB_NAME}`;
 
+// The seed relies on the tables and updated_at triggers of every migration in this checkout.
+// Probing a single object is not enough: older seeds created set_updated_at() themselves.
+async function assertFullyMigrated(client: postgres.Sql): Promise<void> {
+  const journal = JSON.parse(readFileSync('./src/db/migrations/meta/_journal.json', 'utf8')) as {
+    entries: { when: number }[];
+  };
+  const latest = Math.max(...journal.entries.map((entry) => entry.when));
+  const [history] = await client`SELECT to_regclass('drizzle.__drizzle_migrations') IS NOT NULL AS exists`;
+  const [applied] = history?.['exists']
+    ? await client`SELECT max(created_at) AS last FROM drizzle.__drizzle_migrations`
+    : [];
+  if (Number(applied?.['last'] ?? 0) < latest) {
+    throw new Error('The database is missing migrations: run `npm run db:migrate` before seeding');
+  }
+}
+
 async function seed() {
   const client = postgres(connectionString, { max: 1 });
   const db = drizzle(client);
 
   try {
     console.log('🌱 Starting seed...');
+    await assertFullyMigrated(client);
 
     // Enable extensions
     await db.execute(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await db.execute(`CREATE EXTENSION IF NOT EXISTS "pg_trgm"`);
-
-    // Create updated_at trigger function
-    await db.execute(`
-      CREATE OR REPLACE FUNCTION set_updated_at()
-      RETURNS TRIGGER AS $$
-      BEGIN
-        NEW.updated_at = NOW();
-        RETURN NEW;
-      END;
-      $$ LANGUAGE plpgsql
-    `);
-
-    // Create triggers for updated_at
-    for (const [table, triggerName] of [
-      ['clients', 'trg_clients_updated'],
-      ['chatbots', 'trg_chatbots_updated'],
-      ['knowledge_bases', 'trg_knowledge_updated'],
-    ] as [string, string][]) {
-      await db.execute(`
-        DROP TRIGGER IF EXISTS ${triggerName} ON ${table};
-        CREATE TRIGGER ${triggerName}
-        BEFORE UPDATE ON ${table}
-        FOR EACH ROW EXECUTE FUNCTION set_updated_at()
-      `);
-    }
 
     // Seed superadmin — password di-hash otomatis saat seed dijalankan
     const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345';
