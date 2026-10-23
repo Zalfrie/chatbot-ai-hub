@@ -64,4 +64,9 @@ async function startServer() {
   }
 }
 
-startServer();
+// A failure before the try block (e.g. a module that cannot load) is otherwise an unhandled rejection,
+// which winston's handler swallows outside production: the process exits with code 0 and prints nothing
+startServer().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
