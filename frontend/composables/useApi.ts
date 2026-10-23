@@ -1,4 +1,6 @@
-import type { FetchOptions } from 'ofetch'
+// Derived from Nuxt's $fetch so the options always match what it accepts
+// (ofetch's FetchOptions<'json'> types `method` as string and is rejected)
+type RequestOptions = NonNullable<Parameters<typeof $fetch>[1]>
 
 export function useApi() {
   const config = useRuntimeConfig()
@@ -9,7 +11,7 @@ export function useApi() {
 
   async function request<T>(
     path: string,
-    options: FetchOptions<'json'> = {},
+    options: RequestOptions = {},
   ): Promise<T> {
     const token = authStore.accessToken
 
@@ -52,23 +54,23 @@ export function useApi() {
     }
   }
 
-  function get<T>(path: string, options?: FetchOptions<'json'>) {
+  function get<T>(path: string, options?: RequestOptions) {
     return request<T>(path, { ...options, method: 'GET' })
   }
 
-  function post<T>(path: string, body?: unknown, options?: FetchOptions<'json'>) {
+  function post<T>(path: string, body?: unknown, options?: RequestOptions) {
     return request<T>(path, { ...options, method: 'POST', body: body as Record<string, unknown> })
   }
 
-  function put<T>(path: string, body?: unknown, options?: FetchOptions<'json'>) {
+  function put<T>(path: string, body?: unknown, options?: RequestOptions) {
     return request<T>(path, { ...options, method: 'PUT', body: body as Record<string, unknown> })
   }
 
-  function patch<T>(path: string, body?: unknown, options?: FetchOptions<'json'>) {
+  function patch<T>(path: string, body?: unknown, options?: RequestOptions) {
     return request<T>(path, { ...options, method: 'PATCH', body: body as Record<string, unknown> })
   }
 
-  function del<T>(path: string, options?: FetchOptions<'json'>) {
+  function del<T>(path: string, options?: RequestOptions) {
     return request<T>(path, { ...options, method: 'DELETE' })
   }
 

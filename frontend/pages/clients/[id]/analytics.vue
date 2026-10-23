@@ -21,7 +21,7 @@
           <input v-model="dateTo" type="date" class="form-input py-1.5 text-sm" />
         </div>
         <div class="mt-5">
-          <button class="btn-primary" :disabled="pending" @click="fetchData">
+          <button class="btn-primary" :disabled="pending" @click="fetchData()">
             <span v-if="pending" class="spinner" />
             Terapkan
           </button>
