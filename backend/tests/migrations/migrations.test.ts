@@ -1,4 +1,4 @@
-import { describe, it, expect, afterAll } from 'vitest';
+import { describe, it, expect, beforeAll, afterAll } from 'vitest';
 import { copyFileSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import path from 'node:path';
@@ -157,6 +157,18 @@ const FULL_SCHEMA = {
 };
 
 describe('database migrations (real Postgres)', () => {
+  // Ctrl-C skips afterAll, and the next run has another pid. Don't run two migration test runs
+  // against the same server at once.
+  beforeAll(async () => {
+    await withClient(ADMIN_URL, async (sql) => {
+      const stale = await sql<{ datname: string }[]>`
+        SELECT datname FROM pg_database WHERE datname LIKE 'chub\\_migtest\\_%'`;
+      for (const { datname } of stale) {
+        await sql.unsafe(`DROP DATABASE IF EXISTS "${datname}" WITH (FORCE)`);
+      }
+    });
+  });
+
   afterAll(async () => {
     const failures: string[] = [];
     await withClient(ADMIN_URL, async (sql) => {
