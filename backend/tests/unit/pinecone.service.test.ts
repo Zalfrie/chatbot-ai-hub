@@ -9,14 +9,17 @@ const { mockUpsertRecords, mockSearchRecords, mockDeleteMany } = vi.hoisted(() =
   mockDeleteMany: vi.fn().mockResolvedValue(undefined),
 }));
 
+// Pinecone is constructed with `new`, so the mock uses `function`, not an arrow
 vi.mock('@pinecone-database/pinecone', () => ({
-  Pinecone: vi.fn().mockImplementation(() => ({
-    index: vi.fn().mockReturnValue({
-      upsertRecords: mockUpsertRecords,
-      searchRecords: mockSearchRecords,
-      deleteMany: mockDeleteMany,
-    }),
-  })),
+  Pinecone: vi.fn().mockImplementation(function () {
+    return {
+      index: vi.fn().mockReturnValue({
+        upsertRecords: mockUpsertRecords,
+        searchRecords: mockSearchRecords,
+        deleteMany: mockDeleteMany,
+      }),
+    };
+  }),
 }));
 
 // Import AFTER mock is registered

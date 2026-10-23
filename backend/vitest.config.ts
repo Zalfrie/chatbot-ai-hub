@@ -37,12 +37,13 @@ export default defineConfig({
         // WhatsApp — Baileys integration; requires live WA connection to test
         'src/modules/whatsapp/**',
       ],
-      // Ratchet at the measured baseline so CI blocks any drop; target is 70 again (#5)
+      // Ratchet at the measured baseline so CI blocks any drop; target is 70 again (#5).
+      // Re-baselined for coverage-v8 5, which counts statements and handlers instead of raw lines (#46)
       thresholds: {
-        lines: 57,
-        functions: 63,
-        branches: 75,
-        statements: 57,
+        lines: 52,
+        functions: 48,
+        branches: 40,
+        statements: 49,
       },
     },
   },

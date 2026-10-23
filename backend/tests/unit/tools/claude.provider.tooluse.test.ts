@@ -2,15 +2,17 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ClaudeProvider } from '../../../src/providers/ai/claude.provider';
 import type { ChatRequest } from '../../../src/providers/ai/ai.interface';
 
-// Mock the Anthropic SDK
+// Mock the Anthropic SDK (constructed with `new`, so `function`, not an arrow)
 vi.mock('@anthropic-ai/sdk', () => {
   return {
-    default: vi.fn().mockImplementation(() => ({
-      messages: {
-        create: vi.fn(),
-        stream: vi.fn(),
-      },
-    })),
+    default: vi.fn().mockImplementation(function () {
+      return {
+        messages: {
+          create: vi.fn(),
+          stream: vi.fn(),
+        },
+      };
+    }),
   };
 });
 
