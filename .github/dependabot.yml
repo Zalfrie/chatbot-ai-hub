@@ -1,5 +1,7 @@
 # Automatic update PRs. Each one goes through CI like any other PR.
 # Minor/patch bumps are grouped into one PR per package; majors get their own PR.
+# Packages that only work at matching versions get their own group for every update type,
+# listed before the minor/patch group: a dependency joins the first group it matches.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -12,9 +14,16 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: 'chore(deps)'
+    # @types/node majors follow the Node runtime (NODE_VERSION in ci.yml), so bump them by hand
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
+      vitest: # @vitest/coverage-v8 requires the exact same vitest version
+        patterns: ['vitest', '@vitest/*']
       backend-minor-patch:
         update-types: [minor, patch]
+        exclude-patterns: ['vitest', '@vitest/*']
 
   - package-ecosystem: npm
     directory: /frontend
@@ -26,9 +35,16 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: 'chore(deps)'
+    # @types/node majors follow the Node runtime (NODE_VERSION in ci.yml), so bump them by hand
+    ignore:
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
+      pinia: # bumping pinia without @pinia/nuxt leaves two Pinia copies in the app
+        patterns: ['pinia', '@pinia/*']
       frontend-minor-patch:
         update-types: [minor, patch]
+        exclude-patterns: ['pinia', '@pinia/*']
 
   - package-ecosystem: npm
     directory: /widget
