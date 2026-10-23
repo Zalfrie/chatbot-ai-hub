@@ -11,6 +11,9 @@ const sharedOptions = {
   bundle: true,
   platform: 'browser',
   target: ['es2017', 'chrome58', 'firefox57', 'safari11'],
+  // esbuild >=0.28 marks destructuring unsupported below Safari 14.1 and can't lower it.
+  // Older esbuild emitted it natively for these targets, so keep that output.
+  supported: { destructuring: true },
   globalName: 'ChatbotHubWidget',
 };
 
