@@ -1,10 +1,10 @@
 import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { eq } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { adminUsers } from '../../db/schema';
-import { signAdminToken, signRefreshToken, AdminTokenPayload } from '../../middleware/auth.middleware';
-import { env } from '../../config/env';
+import { db } from '../../config/database.js';
+import { adminUsers } from '../../db/schema/index.js';
+import { signAdminToken, signRefreshToken, AdminTokenPayload } from '../../middleware/auth.middleware.js';
+import { env } from '../../config/env.js';
 
 export interface LoginResult {
   accessToken: string;

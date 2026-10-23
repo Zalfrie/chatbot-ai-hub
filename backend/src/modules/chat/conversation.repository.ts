@@ -1,6 +1,6 @@
 import { eq, asc, and, sql } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { conversations, messages, usageLogs, Conversation, Message } from '../../db/schema';
+import { db } from '../../config/database.js';
+import { conversations, messages, usageLogs, Conversation, Message } from '../../db/schema/index.js';
 
 export interface CreateConversationParams {
   clientId: number;

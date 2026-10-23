@@ -1,6 +1,6 @@
 import { Request, Response, NextFunction } from 'express';
-import { logger } from '../utils/logger';
-import { isDevelopment } from '../config/env';
+import { logger } from '../utils/logger.js';
+import { isDevelopment } from '../config/env.js';
 
 /**
  * Operational errors that we know about and can respond to gracefully.

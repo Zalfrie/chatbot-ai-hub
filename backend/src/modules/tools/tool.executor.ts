@@ -1,5 +1,5 @@
-import { TenantTool } from './tool.types';
-import { logger } from '../../utils/logger';
+import { TenantTool } from './tool.types.js';
+import { logger } from '../../utils/logger.js';
 
 const HARD_TIMEOUT_MS = 10_000;
 

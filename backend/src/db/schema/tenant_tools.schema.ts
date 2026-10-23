@@ -13,7 +13,7 @@ import {
   check,
 } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { clients } from './clients.schema';
+import { clients } from './clients.schema.js';
 
 export const tenantTools = pgTable('tenant_tools', {
   id: bigserial('id', { mode: 'number' }).primaryKey(),

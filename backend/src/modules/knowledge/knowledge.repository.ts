@@ -1,6 +1,6 @@
 import { eq, and, desc } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { knowledgeBases, KnowledgeBase } from '../../db/schema';
+import { db } from '../../config/database.js';
+import { knowledgeBases, KnowledgeBase } from '../../db/schema/index.js';
 
 export class KnowledgeRepository {
   async findActiveByClient(clientId: number): Promise<KnowledgeBase[]> {

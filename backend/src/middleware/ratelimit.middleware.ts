@@ -1,7 +1,7 @@
 import { Request, Response, NextFunction } from 'express';
-import { redis } from '../config/redis';
-import { env } from '../config/env';
-import { logger } from '../utils/logger';
+import { redis } from '../config/redis.js';
+import { env } from '../config/env.js';
+import { logger } from '../utils/logger.js';
 
 /**
  * Redis-based sliding-window rate limiter per API key.

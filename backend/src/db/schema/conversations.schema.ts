@@ -8,8 +8,8 @@ import {
   pgEnum,
   jsonb,
 } from 'drizzle-orm/pg-core';
-import { clients } from './clients.schema';
-import { chatbots } from './chatbots.schema';
+import { clients } from './clients.schema.js';
+import { chatbots } from './chatbots.schema.js';
 
 export const conversationChannelEnum = pgEnum('conversation_channel', ['web', 'whatsapp']);
 export const conversationStatusEnum = pgEnum('conversation_status', ['active', 'closed', 'escalated']);

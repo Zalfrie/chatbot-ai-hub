@@ -6,7 +6,7 @@ import {
   timestamp,
   pgEnum,
 } from 'drizzle-orm/pg-core';
-import { clients } from './clients.schema';
+import { clients } from './clients.schema.js';
 
 export const waSessionStatusEnum = pgEnum('wa_session_status', ['disconnected', 'connecting', 'connected', 'banned']);
 

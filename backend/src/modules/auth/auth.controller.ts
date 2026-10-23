@@ -1,6 +1,6 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
-import { authService } from './auth.service';
+import { authService } from './auth.service.js';
 
 const loginSchema = z.object({
   email: z.string().email(),

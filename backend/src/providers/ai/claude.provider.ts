@@ -4,8 +4,8 @@ import type {
   Tool,
   ToolUseBlock,
 } from '@anthropic-ai/sdk/resources/messages';
-import { AIProvider, ChatMessage, ChatRequest, ChatResponse, ToolCallRequest } from './ai.interface';
-import { env } from '../../config/env';
+import { AIProvider, ChatMessage, ChatRequest, ChatResponse, ToolCallRequest } from './ai.interface.js';
+import { env } from '../../config/env.js';
 
 function toAnthropicMessages(messages: ChatMessage[]): MessageParam[] {
   const result: MessageParam[] = [];

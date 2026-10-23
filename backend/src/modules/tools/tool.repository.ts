@@ -1,7 +1,7 @@
 import { eq, and } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { tenantTools, NewTenantTool } from '../../db/schema/tenant_tools.schema';
-import { TenantTool } from './tool.types';
+import { db } from '../../config/database.js';
+import { tenantTools, NewTenantTool } from '../../db/schema/tenant_tools.schema.js';
+import { TenantTool } from './tool.types.js';
 
 function mapRow(row: typeof tenantTools.$inferSelect): TenantTool {
   return {

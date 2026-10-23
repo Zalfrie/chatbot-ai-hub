@@ -1,6 +1,6 @@
 import { GoogleGenerativeAI } from '@google/generative-ai';
-import { AIProvider, ChatMessage, ChatRequest, ChatResponse } from './ai.interface';
-import { env } from '../../config/env';
+import { AIProvider, ChatMessage, ChatRequest, ChatResponse } from './ai.interface.js';
+import { env } from '../../config/env.js';
 
 /** Gemini doesn't support tool_use blocks — extract plain text from any content type. */
 function extractText(content: ChatMessage['content']): string {

@@ -1,9 +1,9 @@
 import { Router, Request, Response, NextFunction } from 'express';
 import { z } from 'zod';
 import { eq, desc } from 'drizzle-orm';
-import { db } from '../../config/database';
-import { clients } from '../../db/schema';
-import { authMiddleware } from '../../middleware/auth.middleware';
+import { db } from '../../config/database.js';
+import { clients } from '../../db/schema/index.js';
+import { authMiddleware } from '../../middleware/auth.middleware.js';
 import crypto from 'crypto';
 
 const router = Router();
