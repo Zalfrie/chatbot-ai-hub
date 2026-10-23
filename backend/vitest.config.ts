@@ -1,9 +1,11 @@
-import { defineConfig } from 'vitest/config';
+import { configDefaults, defineConfig } from 'vitest/config';
 
 export default defineConfig({
   test: {
     globals: true,
     environment: 'node',
+    // Need a real Postgres: run them with `npm run test:migrations` (vitest.migrations.config.ts)
+    exclude: [...configDefaults.exclude, 'tests/migrations/**'],
     setupFiles: ['./tests/setup.ts'],
     env: {
       NODE_ENV: 'test',

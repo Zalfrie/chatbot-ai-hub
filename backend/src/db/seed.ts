@@ -28,7 +28,11 @@ async function seed() {
     await db.execute(`CREATE EXTENSION IF NOT EXISTS "uuid-ossp"`);
     await db.execute(`CREATE EXTENSION IF NOT EXISTS "pg_trgm"`);
 
-    // The updated_at function and triggers come from the migrations (0005), so run db:migrate first
+    // Tables, the updated_at function and its triggers all come from the migrations
+    const [migrated] = await client`SELECT to_regproc('set_updated_at') IS NOT NULL AS ok`;
+    if (!migrated?.['ok']) {
+      throw new Error('The database has not been migrated: run `npm run db:migrate` before seeding');
+    }
 
     // Seed superadmin — password di-hash otomatis saat seed dijalankan
     const adminPassword = process.env.SEED_ADMIN_PASSWORD ?? 'Admin@12345';

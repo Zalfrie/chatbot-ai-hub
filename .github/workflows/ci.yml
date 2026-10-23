@@ -142,9 +142,12 @@ jobs:
         run: npm ci
       - name: Schema changes have a migration
         timeout-minutes: 2
+        # drizzle-kit exits 0 even when it cannot generate (e.g. a rename that needs an interactive
+        # answer), so require its explicit "no changes" message as well as an untouched folder
         run: |
-          npx drizzle-kit generate --name schema_drift_check
-          if [ -n "$(git status --porcelain src/db/migrations)" ]; then
+          output=$(npx drizzle-kit generate --name schema_drift_check 2>&1) || true
+          echo "$output"
+          if ! grep -q "No schema changes" <<<"$output" || [ -n "$(git status --porcelain src/db/migrations)" ]; then
             echo "::error::The Drizzle schema has changes without a migration. Run 'npm run db:generate' and commit the result."
             git status --porcelain src/db/migrations
             exit 1
@@ -153,6 +156,8 @@ jobs:
         run: npm run test:migrations
       - name: db:migrate on an empty database, then again as a no-op
         run: npm run db:migrate && npm run db:migrate
+      - name: db:seed on the migrated database
+        run: npm run db:seed
 
 
   frontend:

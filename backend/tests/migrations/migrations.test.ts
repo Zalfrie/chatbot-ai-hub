@@ -7,10 +7,19 @@ import postgres from 'postgres';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import { migrate } from 'drizzle-orm/postgres-js/migrator';
 
-// Applies the real SQL migrations to throwaway databases on a real Postgres. Skipped unless
-// MIGRATION_TEST_DATABASE_URL points at a server where that user may CREATE DATABASE,
-// e.g. postgres://postgres:postgres@localhost:5432/postgres (see the Migrations job in CI)
-const ADMIN_URL = process.env['MIGRATION_TEST_DATABASE_URL'];
+// Applies the real SQL migrations to throwaway databases on a real Postgres (npm run test:migrations)
+function requiredAdminUrl(): string {
+  const url = process.env['MIGRATION_TEST_DATABASE_URL'];
+  if (!url) {
+    throw new Error(
+      'Set MIGRATION_TEST_DATABASE_URL to a Postgres URL whose user may CREATE DATABASE, '
+      + 'e.g. postgres://postgres:postgres@localhost:5432/postgres',
+    );
+  }
+  return url;
+}
+
+const ADMIN_URL = requiredAdminUrl();
 const MIGRATIONS_DIR = fileURLToPath(new URL('../../src/db/migrations', import.meta.url));
 
 interface JournalEntry {
@@ -36,12 +45,12 @@ async function withClient<T>(url: string, fn: (sql: postgres.Sql) => Promise<T>)
 
 async function createDatabase(label: string): Promise<string> {
   const name = `chub_migtest_${label}_${process.pid}`;
-  await withClient(ADMIN_URL!, async (sql) => {
+  await withClient(ADMIN_URL, async (sql) => {
     await sql.unsafe(`DROP DATABASE IF EXISTS ${name}`);
     await sql.unsafe(`CREATE DATABASE ${name}`);
   });
   createdDatabases.push(name);
-  const url = new URL(ADMIN_URL!);
+  const url = new URL(ADMIN_URL);
   url.pathname = `/${name}`;
   return url.toString();
 }
@@ -85,6 +94,50 @@ async function describeSchema(url: string) {
   });
 }
 
+// Every definition in the public schema, to compare an upgraded database with a new one
+async function schemaFingerprint(url: string) {
+  return withClient(url, async (sql) => {
+    const columns = await sql<{ def: string }[]>`
+      SELECT concat_ws(' ', table_name || '.' || column_name, udt_name, character_maximum_length,
+                       'null=' || is_nullable, 'default=' || column_default) AS def
+      FROM information_schema.columns WHERE table_schema = 'public'`;
+    const constraints = await sql<{ def: string }[]>`
+      SELECT conrelid::regclass || ' ' || conname || ' ' || pg_get_constraintdef(oid) AS def
+      FROM pg_constraint WHERE connamespace = 'public'::regnamespace AND contype IN ('p', 'u', 'c', 'f')`;
+    const indexes = await sql<{ def: string }[]>`SELECT indexdef AS def FROM pg_indexes WHERE schemaname = 'public'`;
+    const triggers = await sql<{ def: string }[]>`
+      SELECT pg_get_triggerdef(t.oid) AS def FROM pg_trigger t
+      JOIN pg_class c ON c.oid = t.tgrelid
+      WHERE c.relnamespace = 'public'::regnamespace AND NOT t.tgisinternal`;
+    const functions = await sql<{ def: string }[]>`
+      SELECT pg_get_functiondef(oid) AS def FROM pg_proc WHERE pronamespace = 'public'::regnamespace`;
+    const enums = await sql<{ def: string }[]>`
+      SELECT t.typname || ' ' || string_agg(e.enumlabel, ',' ORDER BY e.enumsortorder) AS def
+      FROM pg_type t JOIN pg_enum e ON e.enumtypid = t.oid
+      WHERE t.typnamespace = 'public'::regnamespace GROUP BY t.typname`;
+    const sorted = (rows: { def: string }[]) => rows.map((row) => row.def).sort();
+    return {
+      columns: sorted(columns),
+      constraints: sorted(constraints),
+      indexes: sorted(indexes),
+      triggers: sorted(triggers),
+      functions: sorted(functions),
+      enums: sorted(enums),
+    };
+  });
+}
+
+let freshFingerprint: ReturnType<typeof schemaFingerprint> | undefined;
+
+// What `db:migrate` builds on an empty database; created once and shared by the upgrade tests
+function newDatabaseFingerprint() {
+  freshFingerprint ??= createDatabase('reference').then(async (url) => {
+    await runMigrations(url);
+    return schemaFingerprint(url);
+  });
+  return freshFingerprint;
+}
+
 const FULL_SCHEMA = {
   toolsEnabled: true,
   toolsIndex: true,
@@ -103,16 +156,20 @@ const FULL_SCHEMA = {
   ],
 };
 
-describe.skipIf(!ADMIN_URL)('database migrations (real Postgres)', { timeout: 60_000 }, () => {
+describe('database migrations (real Postgres)', () => {
   afterAll(async () => {
-    if (createdDatabases.length) {
-      await withClient(ADMIN_URL!, async (sql) => {
-        for (const name of createdDatabases) {
+    const failures: string[] = [];
+    await withClient(ADMIN_URL, async (sql) => {
+      for (const name of createdDatabases) {
+        try {
           await sql.unsafe(`DROP DATABASE IF EXISTS ${name} WITH (FORCE)`);
+        } catch (err) {
+          failures.push(`${name}: ${(err as Error).message}`);
         }
-      });
-    }
+      }
+    });
     for (const dir of tempDirs) rmSync(dir, { recursive: true, force: true });
+    if (failures.length) throw new Error(`Could not drop test databases:\n${failures.join('\n')}`);
   });
 
   it('builds the full schema on an empty database, and a second run changes nothing', async () => {
@@ -120,9 +177,10 @@ describe.skipIf(!ADMIN_URL)('database migrations (real Postgres)', { timeout: 60
 
     await runMigrations(url);
     expect(await describeSchema(url)).toEqual(FULL_SCHEMA);
+    const afterFirstRun = await schemaFingerprint(url);
 
     await runMigrations(url);
-    expect(await describeSchema(url)).toEqual(FULL_SCHEMA);
+    expect(await schemaFingerprint(url)).toEqual(afterFirstRun);
   });
 
   it('keeps updated_at current without running the seed', async () => {
@@ -145,16 +203,17 @@ describe.skipIf(!ADMIN_URL)('database migrations (real Postgres)', { timeout: 60
   it.each([
     ['migrated up to 0002', [0, 1, 2]],
     ['migrated up to 0002 plus 0004', [0, 1, 2, 4]],
-  ])('brings a database %s up to the full schema', async (_state, applied) => {
+  ])('brings a database %s to the same schema as a new one', async (_state, applied) => {
     const url = await createDatabase(`upgrade_${applied.join('')}`);
 
     await runMigrations(url, migrationsFolderWith(applied));
     await runMigrations(url);
 
     expect(await describeSchema(url)).toEqual(FULL_SCHEMA);
+    expect(await schemaFingerprint(url)).toEqual(await newDatabaseFingerprint());
   });
 
-  it('brings a database at 0002 where 0003 was applied by hand up to the full schema', async () => {
+  it('brings a database at 0002 where 0003 was applied by hand to the same schema as a new one', async () => {
     const url = await createDatabase('manual_0003');
     await runMigrations(url, migrationsFolderWith([0, 1, 2]));
     await withClient(url, (sql) => sql.unsafe(readFileSync(path.join(MIGRATIONS_DIR, '0003_tenant_tools.sql'), 'utf8')));
@@ -162,5 +221,6 @@ describe.skipIf(!ADMIN_URL)('database migrations (real Postgres)', { timeout: 60
     await runMigrations(url);
 
     expect(await describeSchema(url)).toEqual(FULL_SCHEMA);
+    expect(await schemaFingerprint(url)).toEqual(await newDatabaseFingerprint());
   });
 });
