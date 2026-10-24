@@ -7,6 +7,7 @@ import { chatbotRepository } from '../chatbot/chatbot.repository.js';
 import { knowledgeRepository } from '../knowledge/knowledge.repository.js';
 import { conversationRepository, usageRepository } from './conversation.repository.js';
 import { ChatService } from './chat.service.js';
+import { openEventStream } from '../../utils/sse.js';
 import { z } from 'zod';
 
 const router = Router({ mergeParams: true });
@@ -93,18 +94,7 @@ router.post('/stream/preview', async (req: Request, res: Response) => {
   const { message } = parsed.data;
   const sessionId = `preview_${clientId}`;
 
-  res.setHeader('Content-Type', 'text/event-stream');
-  res.setHeader('Cache-Control', 'no-cache');
-  res.setHeader('Connection', 'keep-alive');
-  res.setHeader('X-Accel-Buffering', 'no');
-  res.flushHeaders();
-
-  let aborted = false;
-  req.on('close', () => { aborted = true; });
-
-  const writeEvent = (data: object): void => {
-    if (!aborted) res.write(`data: ${JSON.stringify(data)}\n\n`);
-  };
+  const events = openEventStream(res);
 
   try {
     const chatService = getPreviewChatService();
@@ -117,13 +107,13 @@ router.post('/stream/preview', async (req: Request, res: Response) => {
     });
 
     for await (const event of stream) {
-      if (aborted) break;
-      writeEvent(event);
+      if (events.closed) break;
+      events.send(event);
     }
   } catch {
-    writeEvent({ type: 'error', message: 'Preview failed' });
+    events.send({ type: 'error', message: 'Preview failed' });
   } finally {
-    res.end();
+    events.end();
   }
 });
 

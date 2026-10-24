@@ -1,6 +1,7 @@
 import { Request, Response } from 'express';
 import { z } from 'zod';
 import { ChatService } from './chat.service.js';
+import { openEventStream } from '../../utils/sse.js';
 
 const sendMessageSchema = z.object({
   // UUIDs only: server-generated WhatsApp (`wa_…`) and dashboard preview (`preview_…`)
@@ -67,23 +68,7 @@ export class ChatController {
     const sessionId = parsed.data.session_id ?? crypto.randomUUID();
     const clientId = req.clientId!;
 
-    // Set SSE headers before streaming starts
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.setHeader('X-Accel-Buffering', 'no'); // Disable nginx buffering
-    res.flushHeaders();
-
-    let aborted = false;
-    req.on('close', () => {
-      aborted = true;
-    });
-
-    const writeEvent = (data: object): void => {
-      if (!aborted) {
-        res.write(`data: ${JSON.stringify(data)}\n\n`);
-      }
-    };
+    const events = openEventStream(res);
 
     try {
       const stream = this.chatService.processMessageStream({
@@ -96,13 +81,13 @@ export class ChatController {
       });
 
       for await (const event of stream) {
-        if (aborted) break;
-        writeEvent(event);
+        if (events.closed) break;
+        events.send(event);
       }
     } catch {
-      writeEvent({ type: 'error', message: 'Internal server error' });
+      events.send({ type: 'error', message: 'Internal server error' });
     } finally {
-      res.end();
+      events.end();
     }
   };
 }
