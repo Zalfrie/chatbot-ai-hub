@@ -8,8 +8,9 @@ import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { chunkerService } from './chunker.service.js';
 import { crawlerService } from './crawler.service.js';
 import { importerService } from './importer.service.js';
-import { getPineconeService } from '../../providers/ai/pinecone.service.js';
+import { getPineconeService, isPineconeConfigured } from '../../providers/ai/pinecone.service.js';
 import { knowledgeRepository } from './knowledge.repository.js';
+import { logger } from '../../utils/logger.js';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware);
@@ -32,6 +33,7 @@ const knowledgeSchema = z.object({
 // Helper: chunk → embed → upsert to Pinecone, then mark embedded in DB
 // ---------------------------------------------------------------------------
 async function embedAndUpsert(clientId: number, knowledgeId: number, content: string) {
+  if (!isPineconeConfigured()) return;
   const chunks = chunkerService.chunk(content);
   if (chunks.length === 0) return;
 
@@ -42,6 +44,45 @@ async function embedAndUpsert(clientId: number, knowledgeId: number, content: st
   });
 
   await knowledgeRepository.updateEmbedStatus(knowledgeId, chunks.length);
+}
+
+// ---------------------------------------------------------------------------
+// Helper: make an entry's vectors match its current row. Only active entries have vectors.
+// The delete comes first, so chunks that new content no longer has do not survive.
+// ---------------------------------------------------------------------------
+async function syncVectors(clientId: number, knowledgeId: number) {
+  if (!isPineconeConfigured()) return;
+  await getPineconeService().deleteByKnowledge(clientId, knowledgeId);
+
+  const entry = await knowledgeRepository.findById(knowledgeId, clientId);
+  if (!entry) return; // deleted
+  if (entry.isActive !== true) {
+    await knowledgeRepository.resetEmbedStatus(knowledgeId);
+    return;
+  }
+  await embedAndUpsert(clientId, knowledgeId, entry.content);
+}
+
+// Vector work runs after the response, but its failures must not disappear
+function logSyncFailure(err: unknown, context: { clientId: number; knowledgeId: number }): void {
+  logger.error('Knowledge vector sync failed', {
+    ...context,
+    error: err instanceof Error ? err.message : String(err),
+  });
+}
+
+// One sync per entry at a time, so a quick second edit cannot interleave with the first.
+// Each sync reads the row when it runs, so the last one always reflects the latest state.
+const pendingSyncs = new Map<number, Promise<void>>();
+
+function queueSync(clientId: number, knowledgeId: number): void {
+  const next: Promise<void> = (pendingSyncs.get(knowledgeId) ?? Promise.resolve())
+    .then(() => syncVectors(clientId, knowledgeId))
+    .catch((err: unknown) => logSyncFailure(err, { clientId, knowledgeId }))
+    .finally(() => {
+      if (pendingSyncs.get(knowledgeId) === next) pendingSyncs.delete(knowledgeId);
+    });
+  pendingSyncs.set(knowledgeId, next);
 }
 
 // ---------------------------------------------------------------------------
@@ -89,8 +130,11 @@ router.post('/', async (req: Request, res: Response) => {
       sourceType: 'manual',
     });
 
-    // Background: chunk + embed
-    embedAndUpsert(clientId, entry.id, entry.content).catch(() => {});
+    // Background: chunk + embed (only active entries have vectors)
+    if (entry.isActive === true) {
+      embedAndUpsert(clientId, entry.id, entry.content)
+        .catch((err: unknown) => logSyncFailure(err, { clientId, knowledgeId: entry.id }));
+    }
 
     res.status(201).json(entry);
   } catch {
@@ -120,10 +164,9 @@ router.put('/:kid', async (req: Request, res: Response) => {
       .returning();
     if (!updated) { res.status(404).json({ error: 'Knowledge entry not found' }); return; }
 
-    // If content changed, re-embed
-    if (parsed.data.content) {
-      await getPineconeService().deleteByKnowledge(clientId, kid);
-      embedAndUpsert(clientId, kid, parsed.data.content).catch(() => {});
+    // Content or active state changed: bring the vectors in line with the row
+    if (parsed.data.content !== undefined || parsed.data.isActive !== undefined) {
+      queueSync(clientId, kid);
     }
 
     res.json(updated);
@@ -147,8 +190,8 @@ router.delete('/:kid', async (req: Request, res: Response) => {
       .returning();
     if (!deleted) { res.status(404).json({ error: 'Knowledge entry not found' }); return; }
 
-    // Remove vectors from Pinecone
-    getPineconeService().deleteByKnowledge(clientId, kid).catch(() => {});
+    // Remove its vectors: the row is gone, so the sync only deletes
+    queueSync(clientId, kid);
 
     res.json({ message: 'Knowledge entry deleted' });
   } catch {
@@ -198,7 +241,8 @@ router.post('/import/file', upload.single('file'), async (req: Request, res: Res
       sourceType: 'file',
     });
 
-    embedAndUpsert(clientId, entry.id, content).catch(() => {});
+    embedAndUpsert(clientId, entry.id, content)
+      .catch((err: unknown) => logSyncFailure(err, { clientId, knowledgeId: entry.id }));
 
     res.status(201).json({ ...entry, chunkCount: chunkerService.chunk(content).length });
   } catch (err) {
@@ -241,7 +285,8 @@ router.post('/import/url', async (req: Request, res: Response) => {
       lastCrawledAt: new Date(),
     });
 
-    embedAndUpsert(clientId, entry.id, content).catch(() => {});
+    embedAndUpsert(clientId, entry.id, content)
+      .catch((err: unknown) => logSyncFailure(err, { clientId, knowledgeId: entry.id }));
 
     res.status(201).json({ ...entry, sourceUrl: parsed.data.url });
   } catch (err) {
@@ -278,7 +323,8 @@ router.post('/import/text', async (req: Request, res: Response) => {
       sourceType: 'text',
     });
 
-    embedAndUpsert(clientId, entry.id, parsed.data.content).catch(() => {});
+    embedAndUpsert(clientId, entry.id, parsed.data.content)
+      .catch((err: unknown) => logSyncFailure(err, { clientId, knowledgeId: entry.id }));
 
     res.status(201).json(entry);
   } catch {
@@ -296,11 +342,17 @@ router.post('/reindex', async (req: Request, res: Response) => {
   try {
     const entries = await knowledgeRepository.findAllByClient(clientId);
 
-    // Delete existing vectors then re-embed all
+    // Delete existing vectors then re-embed the active entries
     await getPineconeService().deleteByClient(clientId);
 
+    let reindexed = 0;
     let total = 0;
     for (const entry of entries) {
+      if (entry.isActive !== true) {
+        await knowledgeRepository.resetEmbedStatus(entry.id);
+        continue;
+      }
+      reindexed += 1;
       const chunks = chunkerService.chunk(entry.content);
       if (chunks.length === 0) continue;
 
@@ -314,7 +366,7 @@ router.post('/reindex', async (req: Request, res: Response) => {
       total += chunks.length;
     }
 
-    res.json({ reindexed: entries.length, totalChunks: total });
+    res.json({ reindexed, totalChunks: total });
   } catch (err) {
     res.status(500).json({ error: 'Reindex failed', detail: String(err) });
   }
@@ -331,7 +383,10 @@ router.get('/search', async (req: Request, res: Response) => {
   if (!query) { res.status(400).json({ error: 'q parameter is required' }); return; }
 
   try {
-    const chunks = await getPineconeService().search({ clientId, query, topK: 5 });
+    const active = await knowledgeRepository.findActiveByClient(clientId);
+    const chunks = active.length === 0
+      ? []
+      : await getPineconeService().search({ clientId, knowledgeIds: active.map((e) => e.id), query, topK: 5 });
     res.json({ query, results: chunks });
   } catch (err) {
     res.status(500).json({ error: 'Search failed', detail: String(err) });

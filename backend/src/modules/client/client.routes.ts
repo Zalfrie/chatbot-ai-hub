@@ -4,6 +4,8 @@ import { eq, desc } from 'drizzle-orm';
 import { db } from '../../config/database.js';
 import { clients } from '../../db/schema/index.js';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
+import { getPineconeService, isPineconeConfigured } from '../../providers/ai/pinecone.service.js';
+import { logger } from '../../utils/logger.js';
 import crypto from 'crypto';
 
 const router = Router();
@@ -111,6 +113,16 @@ router.delete('/:id', requireSuperadmin, async (req: Request, res: Response) => 
   try {
     const [deleted] = await db.delete(clients).where(eq(clients.id, id)).returning();
     if (!deleted) { res.status(404).json({ error: 'Client not found' }); return; }
+
+    // Its knowledge rows go with it (ON DELETE CASCADE); its vectors are in Pinecone
+    if (isPineconeConfigured()) {
+      getPineconeService().deleteByClient(id).catch((err: unknown) => {
+        logger.error('Deleting a deleted client\'s knowledge vectors failed', {
+          clientId: id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      });
+    }
     res.json({ message: 'Client deleted' });
   } catch {
     res.status(500).json({ error: 'Failed to delete client' });
