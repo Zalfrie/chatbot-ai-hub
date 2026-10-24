@@ -10,6 +10,7 @@ import { crawlerService } from './crawler.service.js';
 import { importerService } from './importer.service.js';
 import { getPineconeService } from '../../providers/ai/pinecone.service.js';
 import { knowledgeRepository } from './knowledge.repository.js';
+import { OutboundRequestError, validateOutboundUrl } from '../../utils/ssrf.js';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware);
@@ -214,7 +215,10 @@ router.post('/import/url', async (req: Request, res: Response) => {
   if (isNaN(clientId)) { res.status(400).json({ error: 'Invalid client ID' }); return; }
 
   const bodySchema = z.object({
-    url: z.string().url(),
+    url: z.string().url().superRefine((url, ctx) => {
+      const check = validateOutboundUrl(url);
+      if (!check.valid) ctx.addIssue({ code: 'custom', message: check.error ?? 'Invalid URL' });
+    }),
     title: z.string().min(1).max(255),
   });
   const parsed = bodySchema.safeParse(req.body);
@@ -245,6 +249,10 @@ router.post('/import/url', async (req: Request, res: Response) => {
 
     res.status(201).json({ ...entry, sourceUrl: parsed.data.url });
   } catch (err) {
+    if (err instanceof OutboundRequestError) {
+      res.status(422).json({ error: 'URL cannot be imported', detail: err.message });
+      return;
+    }
     res.status(500).json({ error: 'Failed to crawl URL', detail: String(err) });
   }
 });
