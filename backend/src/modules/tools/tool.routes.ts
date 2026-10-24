@@ -3,7 +3,7 @@ import { z, ZodIssueCode } from 'zod';
 import { authMiddleware } from '../../middleware/auth.middleware.js';
 import { toolRepository } from './tool.repository.js';
 import { toolService } from './tool.service.js';
-import { validateWebhookUrl } from '../../utils/ssrf.js';
+import { validateOutboundUrl } from '../../utils/ssrf.js';
 
 const router = Router({ mergeParams: true });
 router.use(authMiddleware);
@@ -13,7 +13,7 @@ const toolSchema = z.object({
   description: z.string().min(10).max(1000),
   parameters_schema: z.record(z.string(), z.unknown()),
   webhook_url: z.string().url().max(500).superRefine((url, ctx) => {
-    const check = validateWebhookUrl(url);
+    const check = validateOutboundUrl(url);
     if (!check.valid) {
       ctx.addIssue({ code: ZodIssueCode.custom, message: check.error ?? 'Invalid webhook URL' });
     }

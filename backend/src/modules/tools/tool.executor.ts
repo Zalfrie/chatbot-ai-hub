@@ -1,7 +1,10 @@
 import { TenantTool } from './tool.types.js';
 import { logger } from '../../utils/logger.js';
+import { safeFetch } from '../../utils/safe-fetch.js';
 
 const HARD_TIMEOUT_MS = 10_000;
+// The result goes into the AI context, so a webhook answer has no reason to be larger
+const MAX_RESPONSE_BYTES = 256 * 1024;
 
 export class ToolExecutor {
   /**
@@ -14,8 +17,6 @@ export class ToolExecutor {
     clientId: number,
   ): Promise<string> {
     const timeout = Math.min(tool.timeoutMs, HARD_TIMEOUT_MS);
-    const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeout);
 
     const payload = {
       tool_name: tool.name,
@@ -32,26 +33,27 @@ export class ToolExecutor {
     try {
       let url = tool.webhookUrl;
       let body: string | undefined = JSON.stringify(payload);
-      let method = tool.httpMethod;
+      const method = tool.httpMethod;
 
       if (method === 'GET') {
-        // Append args as query params for GET requests
-        const params = new URLSearchParams(
-          Object.entries(args).map(([k, v]) => [k, String(v)]),
-        );
-        url = `${url}?${params.toString()}`;
+        // Append args as query params for GET requests, after any the URL already has
+        const withArgs = new URL(url);
+        for (const [k, v] of Object.entries(args)) withArgs.searchParams.append(k, String(v));
+        url = withArgs.toString();
         body = undefined;
         delete headers['Content-Type'];
       }
 
-      const response = await fetch(url, {
+      // No redirects: a webhook answers itself, and its headers may carry the tenant's credentials
+      const response = await safeFetch(url, {
         method,
         headers,
         body,
-        signal: controller.signal,
+        timeoutMs: timeout,
+        maxBytes: MAX_RESPONSE_BYTES,
       });
 
-      const text = await response.text();
+      const text = response.text;
 
       if (!response.ok) {
         logger.warn(`Tool ${tool.name} returned HTTP ${response.status}`, { clientId });
@@ -69,15 +71,14 @@ export class ToolExecutor {
         return text;
       }
     } catch (err) {
-      if ((err as { name?: string }).name === 'AbortError') {
+      const name = (err as { name?: string }).name;
+      if (name === 'TimeoutError' || name === 'AbortError') {
         logger.warn(`Tool ${tool.name} timed out after ${timeout}ms`, { clientId });
         return `Tool ${tool.name} tidak merespons (timeout ${timeout}ms), jawab berdasarkan pengetahuan yang ada.`;
       }
       const message = err instanceof Error ? err.message : 'Unknown error';
       logger.error(`Tool ${tool.name} execution error: ${message}`, { clientId });
       return `Tool ${tool.name} error: ${message}`;
-    } finally {
-      clearTimeout(timer);
     }
   }
 }
