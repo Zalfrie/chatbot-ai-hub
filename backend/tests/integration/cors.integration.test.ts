@@ -7,8 +7,8 @@ vi.mock('../../src/config/env', () => ({
   env: {
     NODE_ENV: 'test',
     JWT_SECRET: 'test-jwt-secret-for-vitest-at-least-32-chars',
-    // The space after the comma is deliberate: entries are trimmed
-    CORS_ORIGINS: 'http://localhost:3000, https://dashboard.example.com',
+    // The space, capital letter and trailing slash are deliberate: entries are normalized
+    CORS_ORIGINS: 'http://localhost:3000, https://Dashboard.example.com/',
     RATE_LIMIT_WINDOW_MS: '60000',
     RATE_LIMIT_MAX_REQUESTS: '30',
   },
@@ -153,6 +153,21 @@ describe('CORS on the dashboard API (/api)', () => {
     expect(res.headers['access-control-allow-origin']).toBe(origin);
     expect(res.headers['access-control-allow-credentials']).toBe('true');
     expect(res.headers['vary']).toContain('Origin');
+  });
+
+  // Every logged-in dashboard call sends Authorization, and the dashboard edits with PUT/PATCH/DELETE
+  it('allows the headers and methods of authenticated dashboard calls', async () => {
+    const res = await request(app)
+      .options('/api/clients/1')
+      .set('Origin', DASHBOARD_ORIGINS[0]!)
+      .set('Access-Control-Request-Method', 'PUT')
+      .set('Access-Control-Request-Headers', 'authorization,content-type');
+
+    expect(res.status).toBe(204);
+    const allowedHeaders = res.headers['access-control-allow-headers']!.toLowerCase().split(',');
+    expect(allowedHeaders).toEqual(expect.arrayContaining(['authorization', 'content-type']));
+    const allowedMethods = res.headers['access-control-allow-methods']!.split(',');
+    expect(allowedMethods).toEqual(expect.arrayContaining(['GET', 'POST', 'PUT', 'PATCH', 'DELETE']));
   });
 
   it('refuses a preflight from any other origin with 403 and no CORS headers', async () => {

@@ -2,9 +2,23 @@ import cors from 'cors';
 import { AppError } from './error.middleware.js';
 import { logger } from '../utils/logger.js';
 
-/** Splits a comma-separated origin list such as CORS_ORIGINS, ignoring spaces and empty entries */
+/**
+ * Parses a comma-separated origin list such as CORS_ORIGINS into the exact form browsers send in
+ * the Origin header, so "https://Dashboard.example.com/" still matches. Entries that are not
+ * http(s) origins are ignored with a warning: without a scheme the parsed origin would be "null",
+ * the Origin of sandboxed and file:// pages.
+ */
 export function parseOrigins(value: string): string[] {
-  return value.split(',').map((origin) => origin.trim()).filter(Boolean);
+  return value.split(',').map((entry) => entry.trim()).filter(Boolean).flatMap((entry) => {
+    try {
+      const url = new URL(entry);
+      if (url.protocol === 'http:' || url.protocol === 'https:') return [url.origin];
+    } catch {
+      // Not a URL: reported below
+    }
+    logger.warn('CORS: ignoring a CORS_ORIGINS entry that is not an http(s) origin', { entry });
+    return [];
+  });
 }
 
 /**
@@ -15,7 +29,7 @@ export const widgetCors = cors({
   origin: '*',
   methods: ['GET', 'POST'],
   allowedHeaders: ['Content-Type', 'X-Api-Key'],
-  // Browsers reuse the preflight for a whole chat session instead of sending one per message
+  // Browsers reuse the preflight for 10 minutes instead of sending one per message
   maxAge: 600,
 });
 
