@@ -37,6 +37,10 @@ const envSchema = z.object({
   RATE_LIMIT_WINDOW_MS: z.string().default('60000'),
   RATE_LIMIT_MAX_REQUESTS: z.string().default('30'),
 
+  // HTTP CORS for the dashboard API (/api) — dashboard origin(s), comma-separated.
+  // The widget API (/v1/chat) accepts every origin.
+  CORS_ORIGINS: z.string().default('http://localhost:3000'),
+
   // Socket.io — restrict CORS to dashboard origin (comma-separated for multiple)
   SOCKET_CORS_ORIGIN: z.string().default('http://localhost:3001'),
 });
