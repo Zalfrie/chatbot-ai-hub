@@ -73,42 +73,40 @@ describe('PineconeService', () => {
       mockSearchRecords.mockResolvedValue({
         result: {
           hits: [
-            { _id: 'hit-1', _score: 0.92, fields: { text: 'Harga kue lapis 25000' } },
-            { _id: 'hit-2', _score: 0.55, fields: { text: 'Kami buka jam 8' } }, // below threshold
+            { _id: 'hit-1', _score: 0.92, fields: { text: 'Harga kue lapis 25000', knowledgeId: 10 } },
+            { _id: 'hit-2', _score: 0.55, fields: { text: 'Kami buka jam 8', knowledgeId: 11 } }, // below threshold
           ],
         },
       });
 
-      const results = await svc.search({ clientId: 1, query: 'harga kue', topK: 3 });
+      const results = await svc.search({ clientId: 1, knowledgeIds: [10, 11], query: 'harga kue', topK: 3 });
 
       expect(results).toHaveLength(1);
-      expect(results[0]).toEqual({ content: 'Harga kue lapis 25000', score: 0.92 });
+      expect(results[0]).toEqual({ content: 'Harga kue lapis 25000', score: 0.92, knowledgeId: 10 });
     });
 
-    it('passes filter with clientId to Pinecone (inside query)', async () => {
+    it('filters on the tenant and on its active entries (inside query)', async () => {
       mockSearchRecords.mockResolvedValue({ result: { hits: [] } });
 
-      await svc.search({ clientId: 42, query: 'test', topK: 3 });
+      await svc.search({ clientId: 42, knowledgeIds: [7, 8], query: 'test', topK: 3 });
 
       const callArg = mockSearchRecords.mock.calls[0][0] as Record<string, unknown>;
       // filter is nested inside query per SearchRecordsOptions type
       const query = callArg['query'] as Record<string, unknown>;
-      expect(query).toMatchObject({
-        filter: { clientId: { $eq: 42 } },
-      });
+      expect(query['filter']).toEqual({ clientId: { $eq: 42 }, knowledgeId: { $in: [7, 8] } });
     });
 
     it('returns empty array when no hits', async () => {
       mockSearchRecords.mockResolvedValue({ result: { hits: [] } });
 
-      const results = await svc.search({ clientId: 1, query: 'xyz', topK: 3 });
+      const results = await svc.search({ clientId: 1, knowledgeIds: [10], query: 'xyz', topK: 3 });
       expect(results).toHaveLength(0);
     });
 
     it('defaults topK to 3', async () => {
       mockSearchRecords.mockResolvedValue({ result: { hits: [] } });
 
-      await svc.search({ clientId: 1, query: 'test' });
+      await svc.search({ clientId: 1, knowledgeIds: [10], query: 'test' });
 
       const callArg = mockSearchRecords.mock.calls[0][0] as { query: { topK: number } };
       expect(callArg.query.topK).toBe(3);
@@ -117,20 +115,19 @@ describe('PineconeService', () => {
 
   // -------------------------------------------------------------------------
   describe('deleteByKnowledge', () => {
-    it('calls deleteMany with correct filter', async () => {
+    // The SDK takes { ids } or { filter }; a bare filter object is rejected before any request
+    it('calls deleteMany with the filter under `filter`', async () => {
       await svc.deleteByKnowledge(1, 10);
 
       expect(mockDeleteMany).toHaveBeenCalledOnce();
-      const filter = mockDeleteMany.mock.calls[0][0] as Record<string, unknown>;
-      expect(filter).toMatchObject({
-        clientId: { $eq: 1 },
-        knowledgeId: { $eq: 10 },
+      expect(mockDeleteMany.mock.calls[0][0]).toEqual({
+        filter: { clientId: { $eq: 1 }, knowledgeId: { $eq: 10 } },
       });
     });
 
-    it('does not throw if deleteMany rejects (no-op fallback)', async () => {
+    it('lets a failed delete reach the caller', async () => {
       mockDeleteMany.mockRejectedValueOnce(new Error('Pinecone down'));
-      await expect(svc.deleteByKnowledge(1, 10)).resolves.toBeUndefined();
+      await expect(svc.deleteByKnowledge(1, 10)).rejects.toThrow('Pinecone down');
     });
   });
 
@@ -140,8 +137,13 @@ describe('PineconeService', () => {
       await svc.deleteByClient(5);
 
       expect(mockDeleteMany).toHaveBeenCalledOnce();
-      const filter = mockDeleteMany.mock.calls[0][0] as Record<string, unknown>;
-      expect(filter).toMatchObject({ clientId: { $eq: 5 } });
+      expect(mockDeleteMany.mock.calls[0][0]).toEqual({ filter: { clientId: { $eq: 5 } } });
+    });
+
+    // Reindex must not re-embed on top of vectors it could not clear
+    it('lets a failed delete reach the caller', async () => {
+      mockDeleteMany.mockRejectedValueOnce(new Error('Pinecone down'));
+      await expect(svc.deleteByClient(5)).rejects.toThrow('Pinecone down');
     });
   });
 });

@@ -351,26 +351,30 @@ export class ChatService {
   }
 
   private async loadKnowledge(clientId: number, query: string) {
-    let knowledge: { title: string; content: string; priority?: number | null; id: number; isActive: boolean | null }[] = [];
+    // The database decides which entries count: vectors of a deleted or disabled entry can
+    // outlive it in Pinecone, so search is limited to the active entries and checked against them
+    const active = await this.knowledgeRepo.findActiveByClient(clientId);
+    if (active.length === 0) return [];
+
     try {
       const pc = this.pinecone ?? getPineconeService();
-      const ragChunks = await pc.search({ clientId, query, topK: 3 });
+      const activeIds = new Set(active.map((entry) => entry.id));
+      const ragChunks = (await pc.search({ clientId, knowledgeIds: [...activeIds], query, topK: 3 }))
+        .filter((chunk) => activeIds.has(chunk.knowledgeId));
 
       if (ragChunks.length > 0) {
-        knowledge = ragChunks.map((chunk, i) => ({
+        return ragChunks.map((chunk, i) => ({
           id: i,
           title: `Relevant Info ${i + 1}`,
           content: chunk.content,
           priority: null,
           isActive: true,
         }));
-      } else {
-        knowledge = await this.knowledgeRepo.findActiveByClient(clientId);
       }
     } catch {
-      knowledge = await this.knowledgeRepo.findActiveByClient(clientId);
+      // Pinecone unavailable or not configured: use the entries themselves
     }
-    return knowledge;
+    return active;
   }
 
   private async getOrCreateConversation(params: ProcessMessageParams, chatbotId: number) {

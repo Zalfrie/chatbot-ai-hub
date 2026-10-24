@@ -3,6 +3,7 @@ import { Pinecone } from '@pinecone-database/pinecone';
 export interface RagChunk {
   content: string;
   score: number;
+  knowledgeId: number;
 }
 
 export class PineconeService {
@@ -41,17 +42,22 @@ export class PineconeService {
 
   /**
    * Search for the top-K most relevant chunks for a query.
-   * Filter is applied inside the query to isolate per clientId (multi-tenant).
+   * Filter is applied inside the query to isolate per clientId (multi-tenant), and to the
+   * given knowledge entries so chunks of deleted or disabled entries are never returned.
    */
   async search(params: {
     clientId: number;
+    knowledgeIds: number[];
     query: string;
     topK?: number;
   }): Promise<RagChunk[]> {
     const response = await this.index.searchRecords({
       query: {
         topK: params.topK ?? 3,
-        filter: { clientId: { $eq: params.clientId } },
+        filter: {
+          clientId: { $eq: params.clientId },
+          knowledgeId: { $in: params.knowledgeIds },
+        },
         inputs: { text: params.query },
       },
       fields: ['text', 'clientId', 'knowledgeId', 'chunkIndex'],
@@ -66,37 +72,38 @@ export class PineconeService {
         return {
           content: (fields['text'] as string) ?? '',
           score: hit._score ?? 0,
+          knowledgeId: Number(fields['knowledgeId']),
         };
       });
   }
 
   /**
    * Delete all chunks belonging to a specific knowledge entry.
-   * Call this before re-embedding on update.
+   * Call this before re-embedding on update. Throws if Pinecone rejects the delete.
    */
   async deleteByKnowledge(clientId: number, knowledgeId: number): Promise<void> {
-    try {
-      await this.index.deleteMany({
+    await this.index.deleteMany({
+      filter: {
         clientId: { $eq: clientId },
         knowledgeId: { $eq: knowledgeId },
-      } as Record<string, unknown>);
-    } catch {
-      // no-op: filter-based delete may not be supported on all plan types
-    }
+      },
+    });
   }
 
   /**
    * Delete all chunks for a client (used during reindex or client deletion).
+   * Throws if Pinecone rejects the delete.
    */
   async deleteByClient(clientId: number): Promise<void> {
-    try {
-      await this.index.deleteMany({
-        clientId: { $eq: clientId },
-      } as Record<string, unknown>);
-    } catch {
-      // no-op
-    }
+    await this.index.deleteMany({
+      filter: { clientId: { $eq: clientId } },
+    });
   }
+}
+
+/** RAG is optional: without Pinecone the chat service uses the knowledge entries directly */
+export function isPineconeConfigured(): boolean {
+  return Boolean(process.env.PINECONE_API_KEY && process.env.PINECONE_INDEX);
 }
 
 // Lazy singleton — deferred until first use so tests without PINECONE_API_KEY don't fail at import time
