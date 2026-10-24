@@ -403,9 +403,14 @@ export class ChatService {
 
     const dbMessages = await this.convRepo.getHistory(conversationId, MAX_HISTORY_MESSAGES);
 
-    const history: ChatMessage[] = dbMessages
-      .filter((m) => m.role === 'user' || m.role === 'assistant')
+    // The window holds the latest messages, so it can begin mid-turn: with a reply whose
+    // question fell outside it, or after a question saved without its reply. Providers such
+    // as Gemini require the context to start with a user message and reject empty ones.
+    const messages: ChatMessage[] = dbMessages
+      .filter((m) => (m.role === 'user' || m.role === 'assistant') && m.content.trim() !== '')
       .map((m) => ({ role: m.role as 'user' | 'assistant', content: m.content }));
+    const firstQuestion = messages.findIndex((m) => m.role === 'user');
+    const history = firstQuestion === -1 ? [] : messages.slice(firstQuestion);
 
     if (history.length > 0) {
       await redis.set(cacheKey, JSON.stringify(history), 'EX', HISTORY_CACHE_TTL);
