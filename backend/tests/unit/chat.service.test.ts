@@ -223,6 +223,69 @@ describe('ChatService.processMessage', () => {
     expect(deps.convRepo.getHistory).toHaveBeenCalledWith(50, 20);
   });
 
+  // The window holds the latest messages, so it can begin with an assistant reply (its user
+  // message fell outside, or a turn was saved without its reply). Gemini rejects such a context.
+  it('starts the AI context at a user message when the window begins mid-turn', async () => {
+    const { redis } = await import('../../src/config/redis');
+    vi.mocked(redis.get).mockResolvedValueOnce(null);
+
+    const dbMessages = [
+      { id: 6, role: 'assistant', content: 'a6', conversationId: 50, createdAt: new Date() },
+      { id: 7, role: 'user', content: 'u7', conversationId: 50, createdAt: new Date() },
+      { id: 8, role: 'assistant', content: 'a7', conversationId: 50, createdAt: new Date() },
+    ];
+    const deps = makeDeps({
+      convRepo: {
+        findBySessionId: vi.fn().mockResolvedValue(mockConversation),
+        getHistory: vi.fn().mockResolvedValue(dbMessages),
+      },
+    });
+    const service = new ChatService(
+      deps.chatbotRepo, deps.knowledgeRepo, deps.convRepo, deps.usageRepo, mockAIProvider,
+    );
+    await service.processMessage(baseParams);
+
+    const sent = vi.mocked(mockAIProvider.chat).mock.calls[0]![0].messages;
+    expect(sent).toEqual([
+      { role: 'user', content: 'u7' },
+      { role: 'assistant', content: 'a7' },
+      { role: 'user', content: baseParams.userMessage },
+    ]);
+    // The cache holds the same normalized context
+    expect(redis.set).toHaveBeenCalledWith(
+      'chat:history:50',
+      JSON.stringify([{ role: 'user', content: 'u7' }, { role: 'assistant', content: 'a7' }]),
+      'EX',
+      expect.any(Number),
+    );
+  });
+
+  // An empty assistant reply (a stream that produced no text) is rejected by Claude and Gemini
+  it('leaves empty messages out of the AI context', async () => {
+    const { redis } = await import('../../src/config/redis');
+    vi.mocked(redis.get).mockResolvedValueOnce(null);
+
+    const dbMessages = [
+      { id: 1, role: 'user', content: 'q1', conversationId: 50, createdAt: new Date() },
+      { id: 2, role: 'assistant', content: '  ', conversationId: 50, createdAt: new Date() },
+      { id: 3, role: 'user', content: 'q2', conversationId: 50, createdAt: new Date() },
+      { id: 4, role: 'assistant', content: 'a2', conversationId: 50, createdAt: new Date() },
+    ];
+    const deps = makeDeps({
+      convRepo: {
+        findBySessionId: vi.fn().mockResolvedValue(mockConversation),
+        getHistory: vi.fn().mockResolvedValue(dbMessages),
+      },
+    });
+    const service = new ChatService(
+      deps.chatbotRepo, deps.knowledgeRepo, deps.convRepo, deps.usageRepo, mockAIProvider,
+    );
+    await service.processMessage(baseParams);
+
+    const sent = vi.mocked(mockAIProvider.chat).mock.calls[0]![0].messages;
+    expect(sent.map((m) => m.content)).toEqual(['q1', 'q2', 'a2', baseParams.userMessage]);
+  });
+
   it('caches DB history to Redis after loading from DB', async () => {
     const { redis } = await import('../../src/config/redis');
     vi.mocked(redis.get).mockResolvedValueOnce(null);
